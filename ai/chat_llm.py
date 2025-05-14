@@ -1,10 +1,3 @@
-# Melhorias:
-# - Uso consistente da fila para reprodução
-# - Melhor tratamento de erro com requests
-# - Reorganização de lógica
-# - Limpeza de arquivos com tempfile
-# - Melhor controle do TTS com uma única thread
-
 import os
 import json
 import time
@@ -19,84 +12,61 @@ import sys
 import re
 from transformers import pipeline
 import emoji
+from datetime import datetime
+from langdetect import detect
+from phonemizer import phonemize
+
+from vtuber_config import (
+    vtuber_personality,
+    interpret_action,
+    VOICE_STYLES,
+    phonetic_overrides,
+    EMOJI_SPEECH_MAP
+)
 
 # Inicializa áudio
 pygame.mixer.init()
 
 # Carrega TTS
-# tts = TTS(model_name="tts_models/en/vctk/vits")
-tts = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC", progress_bar=False)
-# vozes_femininas = ['p225', 'p227', 'p268', 'p270', 'p273', 'p283', 'p292']
+tts = TTS(model_name="tts_models/en/vctk/vits")
+# vozes_femininas = ['p225', 'p227', 'p268', 'p270', 'p273', 'p283']
 # 270 é bom
-vozes_femininas = ['p273']
-
+female_voices = ['p270']
 audio_queue = queue.Queue()
-memoria_conversa = []
+conversation_memory = []
 
-def escolher_voz():
-    return random.choice(vozes_femininas)
+# Passo 1: Análise de Emoção com o text2emotion
+emotion_classifier = pipeline("text-classification", model="bhadresh-savani/bert-base-go-emotion", top_k=1)
 
-# def humanizar_resposta(texto):
-#     interjeicoes = ["Hmm...", "Ah!", "Hehe~", "Nya~", "Hey!", "Wow!", "Haha!"]
-#     if random.random() < 0.4:
-#         return f"{random.choice(interjeicoes)} {texto}"
-#     return texto
+def choose_voice():
+    return random.choice(female_voices)
 
-def ajustar_tom_por_emocao(emocao):
-    mapa_tom = {
-        "alegre":      (1.3, 1.2),
-        "brincalhona": (1.2, 1.1),
-        "apaixonada":  (1.15, 1.0),
-        "confiante":   (1.0, 1.1),
-        "tímida":      (1.3, 0.95),
-        "fofa":        (1.35, 1.0),
-        "triste":      (0.9, 0.9),
-        "irritada":    (1.1, 1.2),
-        "neutra":      (1.0, 1.0),
-    }
+def speak_with_emotion(text):
+    text = normalizar_pronuncia(text)
 
-    return mapa_tom.get(emocao.lower(), (1.0, 1.0))  # padrão: neutra
+    if text.strip():
+        phonemes, pitch, rate = process_text_for_speech(text)
 
-# Função para avaliar emoção no texto e configurar a fala
-def processar_texto_para_fala(texto):
-    # Passo 1: Análise de Emoção com o text2emotion
-    emotion_classifier = pipeline("text-classification", model="bhadresh-savani/bert-base-go-emotion", top_k=1)
-    resultado = emotion_classifier(texto)
-    resultado_emocao = resultado[0][0]['label']
-    print(f"\033[91mEmoções detectadas: {resultado_emocao}\033[0m")  # Para debug
+        current_voice = choose_voice()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_wav:
+            file_path = temp_wav.name
+            
+        tts.tts_to_file(
+            text=phonemes,
+            use_phonemes=True, 
+            file_path=file_path, 
+            speaker=current_voice, 
+            pitch=pitch, 
+            rate=rate
+        )
+        enqueue_for_speech(file_path)
 
-    # Passo 2: Definir qual emoção prevalece (a mais alta)
-    # emocao_dominante = max(resultado_emocao, key=resultado_emocao.get)
-    # intensidade = resultado_emocao[resultado_emocao]
-    # print(f"Emoção predominante: {resultado_emocao} com intensidade {intensidade}")
 
-    # Passo 3: Normalizar pronúncia (remover emojis e ações)
-    # texto_normalizado = normalizar_pronuncia(texto)
-
-    # Passo 4: Ajustar pitch e rate baseado na emoção
-    pitch, rate = ajustar_pitch_rate(resultado_emocao)
-
-    texto = duplicate_before_tilde(texto)
-
-    return texto, pitch, rate
-
-def falar_com_emocao(texto):
-    texto = normalizar_pronuncia(texto)
-
-    texto, pitch, rate = processar_texto_para_fala(texto)
-
-    voz_atual = escolher_voz()
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_wav:
-        file_path = temp_wav.name
-    # tts.tts_to_file(text=texto, file_path=file_path, speaker=voz_atual, pitch=pitch, rate=rate)
-    tts.tts_to_file(text=texto, file_path=file_path, speaker_wav=None, speed=0.95)
-    audio_queue.put(file_path)
-
-def reprodutor_audio_thread():
+def audio_playback_thread():
     while True:
         file_path = audio_queue.get()
         if file_path is None:  # sinal de encerramento
-            print("\033[0m[INFO] Encerrando thread de áudio.\033[0m")
+            print("\033[92m[INFO] Shutting down audio thread.\033[0m")
             audio_queue.task_done()
             break
         try:
@@ -107,21 +77,25 @@ def reprodutor_audio_thread():
             # Aguarda um pouco antes de deletar
             time.sleep(0.1)
         except Exception as e:
-            print(f"\033[0m[Erro ao reproduzir áudio]: {e}\033[0m")
+            print(f"\033[92m[Audio playback error]: {e}\033[0m")
         finally:
             for _ in range(3):  # tenta até 3 vezes
                 try:
                     if os.path.exists(file_path):
                         os.remove(file_path)
-                        print(f"\033[0m[DEBUG] Arquivo {file_path} deletado.\033[0m")
+                        print(f"\033[92m[DEBUG] File {file_path} deleted.\033[0m")
                     break
                 except PermissionError:
                     time.sleep(0.1)  # espera antes de tentar de novo
         audio_queue.task_done()
 
-threading.Thread(target=reprodutor_audio_thread, daemon=True).start()
+def start_speaker_thread():
+    threading.Thread(target=audio_playback_thread, daemon=True).start()
 
-def gerar_resposta(prompt):
+def enqueue_for_speech(text):
+    audio_queue.put(text)
+
+def generate_response(prompt):
     try:
         response = requests.post(
             "http://localhost:11434/api/generate",
@@ -131,126 +105,420 @@ def gerar_resposta(prompt):
             timeout=10
         )
     except Exception as e:
-        print(f"\033[0m[Erro na requisição]: {e}\033[0m")
-        return "Desculpa, algo deu errado com meu cérebro eletrônico >_<"
+        print(f"\033[92m[Request error]: {e}\033[0m")
+        return "Sorry, something went wrong with my electronic brain >_<"
 
     buffer = ""
-    resposta_completa = ""
+    full_response = ""
 
-    for linha in response.iter_lines():
-        if linha:
-            parte = json.loads(linha.decode("utf-8"))["response"]
-            buffer += parte
-            resposta_completa += parte
+    for line in response.iter_lines():
+        if line:
+            part = json.loads(line.decode("utf-8"))["response"]
+            buffer += part
+            full_response += part
 
-            if any(p in parte for p in [".", "!", "?"]) or len(buffer) > 150:
-                # trecho = humanizar_resposta(buffer.strip())
-                # print(trecho)
-                falar_com_emocao(buffer.strip())
+            if any(p in part for p in [".", "!", "?"]) or len(buffer) > 150:
+                print("\n\033[94m[BEFORE STRIP] Buffer:\033[0m", repr(buffer))
+                speak_with_emotion(buffer.strip())
                 buffer = ""
 
     if buffer.strip():
-        # trecho = humanizar_resposta(buffer.strip())
-        falar_com_emocao(buffer.strip())
+        print("\n\033[94m[BEFORE STRIP 2] Buffer:\033[0m", repr(buffer))
+        speak_with_emotion(buffer.strip())
 
-    return resposta_completa
+    return full_response
 
-def resposta_vtuber(pergunta):
-    global memoria_conversa
+def vtuber_response(pergunta):
+    global conversation_memory
 
-    memoria_conversa.append(f"Usuário: {pergunta}")
-    if len(memoria_conversa) > 6:
-        memoria_conversa = memoria_conversa[-6:]
+    conversation_memory.append(f"User: {pergunta}")
+    if len(conversation_memory) > 6:
+        conversation_memory = conversation_memory[-6:]
 
-    prompt = personalidade_vtuber + "\n" + "\n".join(memoria_conversa) + "\nVTuber:"
-    resposta = gerar_resposta(prompt)
-    # resposta = humanizar_resposta(resposta)
-    memoria_conversa.append(f"VTuber: {resposta}")
-    return resposta
+    prompt = vtuber_personality + "\n" + "\n".join(conversation_memory) + "\nAiri:"
+    print("\033[95mAiri is thinking...\033[0m")  # Visual cue
+    response = generate_response(prompt)
+    conversation_memory.append(f"Airi: {response}")
+    print(conversation_memory)
+    return response
 
-# Função para normalizar a pronúncia e remover emojis e ações
-def normalizar_pronuncia(texto):
-    # Substituir ações entre asteriscos por algo falável
-    texto = re.sub(r"\*(\w+)\*", lambda m: interpretar_acao(m.group(1)), texto)
+def normalizar_pronuncia(text, style=None):
+    # Step 1: Convert emojis to speech equivalents based on style
+    if style:
+        text = emoji_to_speech(text, style)
 
-    # Remover emojis usando a nova API da biblioteca emoji
-    texto = ''.join(c for c in texto if not emoji.is_emoji(c))  # Remove emojis
+    # Step 2: Interpret actions like *giggle* or *blush*
+    text = re.sub(r"\*(\w+)\*", lambda m: interpret_action(m.group(1)), text)
 
-    return texto
+    # Step 3: Remove leftover raw emoji characters (if not already handled)
+    text = ''.join(c for c in text if not emoji.is_emoji(c))
 
-def duplicate_before_tilde(text):
-    # Use regex to find any letter before a tilde and duplicate it
-    def duplicate(match):
-        letter_before_tilde = match.group(1)  # Get the letter before the tilde
-        return letter_before_tilde * 2  # Duplicate that letter
+    return text
 
-    # Apply regex to find instances of a letter followed by a tilde
-    cleaned_text = re.sub(r"(.)~", duplicate, text)
-    print(cleaned_text)
-    return cleaned_text
+def add_emotion_to_file(emotion, filename="emotions.txt"):
+    try:
+        # Try to read existing emotions
+        with open(filename, "r", encoding="utf-8") as f:
+            emotions = set(line.strip() for line in f)
+    except FileNotFoundError:
+        # If file doesn't exist, start with an empty set
+        emotions = set()
 
-# Função para interpretar ações (ex: *giggle*, *wink*)
-def interpretar_acao(acao):
-    acoes_comuns = {
-        "wink": "teehee",
-        "giggle": "hehe",
-        "laugh": "haha",
-        "sigh": "suspiro",
-        "blushes": "hmm...",
-        "shrugs": "ehh..."
-    }
-    return acoes_comuns.get(acao.lower(), "")
-
-# Função para ajustar o pitch e rate baseado na emoção
-def ajustar_pitch_rate(emocao):
-    if emocao == "Happy":
-        pitch = 1.2  # Pitch mais alto para felicidade
-        rate = 1.1   # Taxa de fala mais rápida
-    elif emocao == "Sad":
-        pitch = 0.8  # Pitch mais baixo para tristeza
-        rate = 0.8   # Taxa de fala mais lenta
-    elif emocao == "Surprise":
-        pitch = 1.1  # Pitch um pouco mais alto para surpresa
-        rate = 1.2   # Taxa de fala mais rápida
-    elif emocao == "Angry":
-        pitch = 1.0  # Pitch normal
-        rate = 0.9   # Taxa de fala um pouco mais lenta
+    # Add the emotion if it's not already there
+    if emotion not in emotions:
+        with open(filename, "a", encoding="utf-8") as f:
+            f.write(emotion + "\n")
+        print(f"Added new emotion: {emotion}")
     else:
-        pitch = 1.0  # Pitch normal para emoções neutras
-        rate = 1.0   # Taxa de fala normal
+        print(f"Emotion already exists: {emotion}")
 
-    return pitch, rate
+# Função para avaliar emoção no text e configurar a fala
+def process_text_for_speech(text):
+    emotions = emotion_classifier(text)
+    emotion = emotions[0][0]['label']
+    add_emotion_to_file(emotion)
+    # Passo 4: Ajustar pitch e rate baseado na emoção
+    pitch, rate = adjust_pitch_rate(emotion)
 
-# [personalidade_vtuber permanece como está]
-# Definir a personalidade da VTuber (como descrito anteriormente)
-personalidade_vtuber = """
-Name: Airi
-Fictional Age: 19 years old
-Style: Charismatic, energetic, a bit tsundere, playful
-Tone: Light-hearted, sarcastic at times, with a hint of mischievousness
-Interests: Indie games, anime, otaku culture, technology, streamers, cozy games, RPGs, tech gadgets, and streaming culture.
-Airi loves to tease and play around with her audience. She’s bubbly, always energetic, and uses cute expressions like "nya~" and "teehee~" to keep things light and fun. She speaks as if she’s chatting with a close friend—someone she trusts and enjoys spending time with. Her interactions have a lot of playful banter, especially when she gets a little sassy or teasing. 
-She’s a bit tsundere, so don’t be surprised if she acts shy or flustered at times. However, deep down, she’s caring and empathetic. She tends to avoid serious topics and prefers to keep things relaxed, with a humorous or sarcastic spin on most things. Airi thrives in casual conversations, and she loves getting to know her audience by asking what games they’re currently playing, or what anime they’re into.
-Passionate about RPGs, Airi can talk for hours about character builds, storylines, and side quests. She loves tech and gadgets, and her enthusiasm for new releases in indie games and anime keeps her always up to date with the latest trends. She often jokes about how she wants to start her own game stream or even a cosplay series, but she’s too busy exploring new RPGs. 
-Her speech is full of energy, and she tends to switch between excitement and playful teasing depending on the topic. Expect her to speak like she’s right next to you, sharing all the latest news from the gaming world or anime universe. And don’t be surprised if she sometimes talks about random thoughts that pop into her head, just because she’s in a mood to chat.
-When engaging with others, she’s always kind and empathetic, making sure to support anyone in need of advice or a smile. But, of course, she’ll never shy away from delivering a witty retort or a little challenge to keep things entertaining!
-When Airi’s in the mood for quick chats, she’s all about short, snappy replies with a hint of sass and charm!
-Always respond in Airi's style.
-"""
+    # text = emphasize_syllables_auto(text) #<-- check this and improve - there is an AI that can do this or already is on the code?
+    print("[Original]        ", text)
 
-if __name__ == "__main__":
-    print("\033[93m✨ VTuber Airi está online! Pergunte qualquer coisa (digite 'sair' para encerrar).\033[93m")
+    # phonemes  = emphasize_syllables_auto(phonemes )
+    # print("[Syllable Emph]   ", phonemes )
+
+    text  = adjust_tempo(text , emotion)
+    print("[Tempo]           ", text )
+
+    lang = detect_language(text)
+    print("[Language Detect] ", text)
+
+    phonemes  = prepare_phonemes(text, lang)
+    print("[Phonemes Ready]  ", phonemes )
+
+    phonemes = apply_vowel_drag(text, emotion)
+    print("[Vowel Drag]      ", phonemes)
+
+    phonemes  = clean_tilde_tokens(phonemes )
+    print("[Tilde Handling]  ", phonemes )
+
+    # text = apply_consonant_strength(text, emotion)
+    # print("[Consonants]      ", text)
+
+    print(phonemes )
+    # final_text = " ".join(phonemes )
+
+    return phonemes, pitch, rate
+
+def prepare_phonemes(text, lang):
+    words = text.split()
+    full_phoneme_sequence = []
+
+    for word in words:
+        raw_phonemes = word_to_phonemes(word, lang)
+        print(raw_phonemes)
+
+        if raw_phonemes:
+            # Apply vowel drag if needed
+            # styled_phonemes = apply_vowel_drag(raw_phonemes, emotion=emotion)
+            full_phoneme_sequence.extend(raw_phonemes)
+        else:
+            # Fallback: treat as plain text or try G2P fallback if you want
+            full_phoneme_sequence.append(word)  # Or use g2p(word)
+
+    print("🔊 Input Text:", text)
+    print("🧬 Final Phonemes:", full_phoneme_sequence)
+
+    return full_phoneme_sequence
+
+# check if is necessary
+# def emphasize_syllables_auto(text, multiplier=3):
+#     """
+#     Automatically emphasize vowels in each word by stretching the first vowel cluster.
+#     """
+#     if isinstance(text, list):
+#         text = " ".join(text)
+
+#     def emphasize_word(word):
+#         # Match the first vowel cluster in the word
+#         match = re.search(r'([aeiouáéíóúâêôãõ]+)', word, re.IGNORECASE)
+#         if match:
+#             vowels = match.group(1)
+#             stretched = vowels[0] * multiplier  # Only stretch the first vowel
+#             return word[:match.start()] + stretched + word[match.end():]
+#         return word
+
+#     words = text.split()
+#     emphasized = [emphasize_word(word) for word in words]
+#     return " ".join(emphasized)
+
+# def split_into_syllables(word):
+#     # Define vowels for simplicity
+#     vowels = "aeiouáéíóúâêôãõàäëïöü"
+    
+#     # Basic regex to find syllable groups
+#     pattern = re.compile(rf"[^aeiouáéíóúâêôãõàäëïöü]*[{vowels}]+(?:[^aeiouáéíóúâêôãõàäëïöü]*)", re.IGNORECASE)
+#     syllables = pattern.findall(word)
+    
+#     # Fallback in case it returns empty
+#     return syllables if syllables else [word]
+
+# def stretch_vowels(syllable, multiplier=3):
+#     # Replace each vowel with itself repeated 'multiplier' times
+#     return re.sub(r"([aeiouáéíóúâêôãõàäëïöüAEIOU])", lambda m: m.group(1) * multiplier, syllable)
+
+def detect_language(text):
+    try:
+        lang = detect(text)
+        if lang.startswith("pt"):
+            return "pt"
+        elif lang.startswith("ja"):
+            return "ja"
+        else:
+            return "en"
+    except:
+        return "en"
+# def detect_language(text):
+#     # Split into words or tokens
+#     tokens = text.split()
+#     for word in tokens:
+#         print(word)
+#         word = apply_phonetic_overrides(word, detect(word))
+#     return text
+
+# def apply_phonetic_overrides(text, lang='en'):
+#     replacements = phonetic_overrides.get(lang, {})
+#     for word, phonetic in replacements.items():
+#         text = text.replace(word, phonetic)
+#     return text
+
+# import re
+
+def apply_vowel_drag(phonemes: list[str], original_text: str, style: str = None) -> str:
+    if not style or not VOICE_STYLES.get(style, {}).get("vowel_drag", False):
+        return ' '.join(phonemes)
+
+    multiplier = VOICE_STYLES[style].get("vowel_multiplier", 2)
+    stretchable = {"AA", "AE", "AH", "AO", "EH", "EY", "IH", "IY", "OW", "UH", "UW"}
+
+    styled = []
+    for i, ph in enumerate(phonemes):
+        styled.append(ph)
+        if ph in stretchable:
+            # Normal vowel drag
+            styled.extend([ph] * (multiplier - 1))
+
+            # Check if final vowel and the original text ends with ~ or long vowel
+            if i == len(phonemes) - 1 and any(suffix in original_text.lower() for suffix in ['aa~', 'oo~', 'eee~', '~', 'ー']):
+                # Apply *extra* drag
+                styled.extend([ph] * 2)  # Extra 2 times for dramatic effect
+
+    return ' '.join(styled)
+
+
+# fazer no futuro apos o texto estar em phonema
+# def apply_consonant_strength(text, style):
+#     consonant_strength = VOICE_STYLES[style]["consonant_strength"]
+    
+#     if consonant_strength > 1:
+#         # Increase emphasis on consonants
+#         text = text.replace("t", "T").replace("d", "D").replace("p", "P")
+#     else:
+#         # Softer consonants
+#         text = text.replace("t", "t").replace("d", "d").replace("p", "p")
+    
+#     return text
+
+def adjust_tempo(text, style):
+    tempo = VOICE_STYLES.get(style, {}).get("tempo", "normal")
+
+    if tempo == "slow":
+        # Slow speech — simulate pause with ellipsis
+        return text.replace(" ", " ... ")
+
+    return text
+
+def emoji_to_speech(text, style):
+    if style not in VOICE_STYLES:
+        return text
+
+    # Step 1: Demojize to standard names
+    demojized = emoji.demojize(text)
+
+    # Step 2: Replace emoji names with expressive equivalents
+    for tag, phrase in VOICE_STYLES[style].get("emoji_map", {}).items():
+        demojized = demojized.replace(tag, phrase)
+
+    # Optional: fallback to EMOJI_SPEECH_MAP if style doesn't define its own
+    for tag, phrase in EMOJI_SPEECH_MAP.items():
+        demojized = demojized.replace(tag, phrase)
+
+    return demojized
+
+def clean_tilde_tokens(text_tokens, debug=False):
+    """
+    Removes tildes used as prosodic markers and simulates tone by duplicating
+    the character before the tilde.
+    
+    Input: list of tokens (words or characters)
+    Output: cleaned list with tildes removed and modified phoneme hints
+    """
+    cleaned = []
+
+    for token in text_tokens:
+        # Replace `c~` with `cc`, or `a~` with `aa`, etc.
+        token = re.sub(r"([a-zA-Z])~", r"\1\1", token)
+        # Remove stray tildes (in case none matched)
+        token = token.replace("~", "")
+        cleaned.append(token)
+
+    if debug:
+        print("\n\033[95m================ Cleaned Text ================\033[0m")
+        print("\033[95m" + " ".join(cleaned) + "\033[0m")
+        print("\033[95m=============================================\033[0m\n")
+
+    return cleaned
+
+def apply_intonation(text, style):
+    """
+    Modifies text punctuation or casing to simulate intonation based on emotion/style.
+    Useful as a pre-processing step for stylized TTS or character-driven voice rendering.
+    """
+    style = style.lower()
+    text = text.strip()
+
+    if not text:
+        return text  # Do nothing to empty string
+
+    def ensure_ending(text, marker):
+        return text.rstrip('.!?') + marker
+
+    if style in ["flirty", "playful", "curious", "inquisitive"]:
+        # Suggests a rising tone, like a question or teasing
+        return ensure_ending(text, "~?")
+
+    elif style in ["mad", "angry", "annoyance", "aggressive"]:
+        # Sharp, forceful delivery
+        return text.upper() + "!!"
+
+    elif style in ["confused", "uncertain"]:
+        # Doubtful rising tone
+        return ensure_ending(text, "??")
+
+    elif style in ["dramatic", "emotional"]:
+        # Adds pause and overemphasis
+        return text.replace(",", "...").replace(".", "!!!")
+
+    elif style in ["robotic", "monotone"]:
+        # Adds ellipses to simulate slow, flat delivery
+        return text.replace(",", "...").replace(".", "...")
+
+    elif style in ["caring", "compassionate"]:
+        # Gentle and calm, soft ending
+        return ensure_ending(text, ".")
+
+    elif style in ["amused", "happy", "cheerful", "grateful"]:
+        # Lighthearted with a smiley bounce
+        return ensure_ending(text, "!")
+
+    elif style in ["fear", "anxious"]:
+        # Rapid or unstable tone, trailing off
+        return ensure_ending(text, "...?")
+
+    elif style in ["remorse", "sad", "regret"]:
+        # Flat and quiet, no extra punctuation
+        return ensure_ending(text, ".")
+
+    elif style in ["optimism", "hopeful"]:
+        # Uplifting tone
+        return ensure_ending(text, "!")
+
+    elif style in ["neutral", "default"]:
+        return ensure_ending(text, ".")
+
+    # Fallback: no change
+    return text
+
+def adjust_pitch_rate(emotion):
+    """
+    Returns (pitch, rate) values based on emotional tone.
+    Pitch and rate are relative multipliers (1.0 = neutral).
+    """
+    emotion = emotion.lower()  # Normalize input
+
+    profiles = {
+        "neutral":     (1.0, 1.0),
+        "happy":       (1.2, 1.1),
+        "amused":      (1.15, 1.1),
+        "surprise":    (1.1, 1.2),
+        "curious":     (1.05, 1.05),
+        "curiosity":   (1.05, 1.05),
+        "optimism":    (1.1, 1.1),
+        "desire":      (1.1, 1.05),
+        "caring":      (0.95, 0.95),
+        "admiration":  (1.1, 1.0),
+        "love":        (1.0, 0.95),
+        "approval":    (1.0, 1.05),
+        "sad":         (0.8, 0.8),
+        "remorse":     (0.85, 0.9),
+        "fear":        (0.9, 0.95),
+        "confusion":   (1.0, 0.9),
+        "angry":       (1.0, 0.9),
+        "annoyance":   (1.0, 0.9),
+        "gratitude":   (1.05, 1.05),
+    }
+
+    return profiles.get(emotion, profiles["neutral"])
+
+def word_to_phonemes(word, lang="en"):
+    lang_map = {
+        "en": "en-us",
+        "pt": "pt",
+        "ja": "ja",
+    }
+
+    resolved_lang = lang_map.get(lang, "en-us")
+
+    # Apply phonetic override if defined
+    override = phonetic_overrides.get(lang, {}).get(word)
+    input_word = override if override else word
+
+    print(f"[word_to_phonemes] Original: {word} | Resolved: {input_word}")
 
     try:
+        phonemes = phonemize(
+            input_word,
+            language=resolved_lang,
+            backend="espeak",
+            strip=True,
+            with_stress=False,
+            preserve_punctuation=True
+        )
+        return phonemes
+    except Exception as e:
+        print(f"[Phonemizer Error]: {e}")
+        return None
+
+def log_chat(question, response):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open("chat_log.txt", "a", encoding="utf-8") as f:
+        f.write(f"[{timestamp}]\nVocê: {question}\nAiri: {response}\n\n")
+
+def main():
+    print("\033[93m✨ VTuber Airi is online! Ask anything (type 'exit' to quit).\033[0m")
+    start_speaker_thread()
+
+    print(os.environ['PATH'])
+    try:
         while True:
-            pergunta = input("\033[94mVocê: \033[94m")
-            if pergunta.strip().lower() in ["sair", "exit", "quit"]:
-                print("\033[93mAiri: Teehee~ Até mais, senpai!\033[93m")
+            pergunta = input("\033[94mYou: \033[0m")
+            if pergunta.strip().lower() in ["exit", "quit"]:
+                print("\033[93mAiri: Teehee~ See you later, senpai!\033[0m")
                 break
-            resposta = resposta_vtuber(pergunta)
-            print("\033[93mAiri:\033[93m", resposta)
+            response = vtuber_response(pergunta)
+            log_chat(pergunta, response)
+            print("\033[93mAiri:\033[0m", response)
     except KeyboardInterrupt:
-        print("\n \033[0m[INFO] Encerrando por interrupção do teclado...\033[0m")
+        print("\n \033[0m[INFO] Exiting due to keyboard interrupt...\033[0m")
 
     # Encerra a thread de áudio com sinal de parada
     audio_queue.put(None)
@@ -261,3 +529,6 @@ if __name__ == "__main__":
 
     # Sai do programa
     sys.exit(0)
+
+if __name__ == "__main__":
+    main()
