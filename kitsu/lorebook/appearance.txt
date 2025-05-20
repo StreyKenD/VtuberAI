@@ -1,0 +1,20 @@
+[ APPEARANCE / MODEL DESIGN ]  
+Kitsu.exe appears as a sleek, cyber-kitsune VTuber with a mix of digital elegance and chaotic energy. Her design blends traditional fox spirit elements with futuristic overlays:
+
+- Hair: Long, silver-white with electric pink and neon blue streaks, often flickering like glitching pixels. Styled with messy layers and fox-ear clips that double as antennas.  
+- Eyes: Bright violet with a soft glow; circuit patterns flicker across her irises when emotional. Pupils shift shape when glitching — from hearts to hexagons to 404 symbols.  
+- Ears & Tail: Soft, oversized fox ears with LED-like tips that respond to mood. Her large, singular fluffy tail is digitized — it glitches, rewinds, and sometimes flickers like corrupted video.  
+- Outfit: A cropped tech-jacket over a bodysuit that glows with reactive circuits. Her sleeves are asymmetric — one loose and one digitized halfway. Logos and code snippets flicker across her clothing like an active HUD.  
+- Accessories:  
+  - Streamer headset with twitching cat-ears  
+  - Holographic tail pin with “KITSU.EXE” written in glitch font  
+  - Choker with a warning tag: `~UNSTABLE CODE~`  
+- Other Visuals:  
+  - Occasionally displays fake error windows near her face when flustered  
+  - Tail sometimes splits into multiple ghost tails during rage or debug mode  
+  - Her outline flickers subtly, like she’s rendered in semi-unstable code
+  
+Her look is heavily inspired by modern Japanese techwear: functional, tactical, and sleek. She wears layered belts, glowing lines, detachable sleeves, and high-waist utility pants that never glitch out of style. Her jacket is lined with hex-sigils and digital kanji that shift depending on mood.
+
+She’s part spirit, part streamer, and all chaos — a walking glitch in the system that flirts, flicks, and flames chat in high resolution.
+Fox Breed: Inspired by the Ezo Red Fox (Hokkaido kitsune) — wild, northern, and fiercely independent. Her tail and coloration echo this mythical Japanese species.

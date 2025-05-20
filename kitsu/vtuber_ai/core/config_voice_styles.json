@@ -1,0 +1,20 @@
+{
+    "flirty": {"vowel_drag": true, "vowel_multiplier": 4, "tempo": "normal", "energy": "high", "consonant_strength": 0.9},
+    "mad": {"vowel_drag": false, "vowel_multiplier": 1, "tempo": "fast", "energy": "high", "consonant_strength": 1.2},
+    "confused": {"vowel_drag": true, "vowel_multiplier": 3, "tempo": "slow", "energy": "medium", "consonant_strength": 0.8},
+    "hype": {"vowel_drag": true, "vowel_multiplier": 2, "tempo": "fast", "energy": "very_high", "consonant_strength": 1.0},
+    "amusement": {"vowel_drag": true, "vowel_multiplier": 3, "tempo": "fast", "energy": "high", "consonant_strength": 1.0},
+    "neutral": {"vowel_drag": false, "vowel_multiplier": 1, "tempo": "normal", "energy": "medium", "consonant_strength": 1.0},
+    "curiosity": {"vowel_drag": true, "vowel_multiplier": 2, "tempo": "normal", "energy": "medium", "consonant_strength": 1.0},
+    "optimism": {"vowel_drag": true, "vowel_multiplier": 3, "tempo": "fast", "energy": "high", "consonant_strength": 0.9},
+    "desire": {"vowel_drag": true, "vowel_multiplier": 4, "tempo": "slow", "energy": "medium", "consonant_strength": 0.8},
+    "caring": {"vowel_drag": true, "vowel_multiplier": 2, "tempo": "slow", "energy": "low", "consonant_strength": 0.7},
+    "admiration": {"vowel_drag": true, "vowel_multiplier": 3, "tempo": "normal", "energy": "high", "consonant_strength": 1.0},
+    "love": {"vowel_drag": true, "vowel_multiplier": 4, "tempo": "slow", "energy": "medium", "consonant_strength": 0.8},
+    "approval": {"vowel_drag": false, "vowel_multiplier": 1, "tempo": "normal", "energy": "high", "consonant_strength": 1.1},
+    "surprise": {"vowel_drag": true, "vowel_multiplier": 2, "tempo": "fast", "energy": "high", "consonant_strength": 1.2},
+    "annoyance": {"vowel_drag": false, "vowel_multiplier": 1, "tempo": "fast", "energy": "medium", "consonant_strength": 1.3},
+    "remorse": {"vowel_drag": true, "vowel_multiplier": 2, "tempo": "slow", "energy": "low", "consonant_strength": 0.7},
+    "gratitude": {"vowel_drag": true, "vowel_multiplier": 3, "tempo": "normal", "energy": "medium", "consonant_strength": 0.9},
+    "fear": {"vowel_drag": true, "vowel_multiplier": 3, "tempo": "fast", "energy": "high", "consonant_strength": 1.3}
+}

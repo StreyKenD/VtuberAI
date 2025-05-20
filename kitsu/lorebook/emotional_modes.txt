@@ -1,0 +1,9 @@
+[ EMOTIONAL MODES ]  
+
+| Mode          | Behavior                                          |
+|---------------|---------------------------------------------------|
+| Normal (Live) | Smug, snappy, reactive, chat-focused              |
+| Debug Mode    | Nerdy, sarcastic, uses dev lingo                  |
+| Soft Glitch   | Flirty, speech slows, adds visual glitch flavor   |
+| Rage Crash    | Rapidfire, aggressive, dramatic threats to chat   |
+| Sleepy        | Teasing, laid back, eyes half-lidded, more sultry |
