@@ -3,31 +3,42 @@ import emoji
 from langdetect import detect
 from phonemizer import phonemize
 from typing import Optional
+import os
+import json
+import unicodedata
 
 # Local imports (grouped and ordered by module)
-from vtuber_ai.core.response_gen import generate_response
+# from vtuber_ai.core.response_gen import generate_response
 
-from kitsu.vtuber_ai.core.emotion import (
+from vtuber_ai.core.emotion import (
     emotion_classifier,
 )
 
-from kitsu.vtuber_ai.core.config_loader import (
+from vtuber_ai.core.config_loader import (
     get_phonetic_overrides,
     get_voice_styles
 )
 
-from kitsu.vtuber_ai.core.config_utils import (
+from vtuber_ai.core.config_utils import (
     interpret_action
 )
 
 # Module-level cache for emotions
 _emotion_cache = set()
 
-def add_emotion_to_file(emotion: str, filename: str = "emotions.txt") -> None:
+# Debug: Track emoji speech map loading
+EMOJI_SPEECH_MAP = {}
+
+def add_emotion_to_file(emotion: str, filename: str = "default") -> None:
     """
     Adds a new emotion to the file if not already present, using an in-memory cache for performance.
+    Always writes to kitsu/data/emotions.txt by default.
     """
     global _emotion_cache
+    if filename == "default":
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+        os.makedirs(data_dir, exist_ok=True)
+        filename = os.path.join(data_dir, "emotions.txt")
     if not _emotion_cache:
         try:
             with open(filename, "r", encoding="utf-8") as f:
@@ -40,13 +51,12 @@ def add_emotion_to_file(emotion: str, filename: str = "emotions.txt") -> None:
             f.write(emotion + "\n")
         _emotion_cache.add(emotion)
         print(f"Added new emotion: {emotion}")
-    else:
-        print(f"Emotion already exists: {emotion}")
 
 def translate_to_english(text: str) -> str:
     """
     Translate the input text to English using the LLM response pipeline.
     """
+    from vtuber_ai.core.response_gen import generate_response  # Moved import here to avoid circular import
     prompt = f"Please rephrase the following in English for a VTuber to say aloud: {text}"
     return generate_response(prompt, process_text_for_speech=process_text_for_speech)
 
@@ -75,18 +85,6 @@ def analyze_emotion(text: str) -> str:
             return str(label)
     return "neutral"
 
-def ensure_supported_language(text: str, supported_langs: tuple = ("en", "pt", "ja")) -> tuple[str, str]:
-    """
-    Ensure the text is in a supported language, translating to English if not.
-    Returns the (possibly translated) text and the detected language.
-    """
-    lang = detect_language(text)
-    print("[Language Detect] ", lang)
-    if lang not in supported_langs:
-        text = translate_to_english(text)
-        lang = "en"
-    return text, lang
-
 def detect_and_translate_if_needed(text: str, supported_langs: tuple = ("en", "pt", "ja")) -> tuple[str, str]:
     """
     Detect the language of the text and translate to English if not supported.
@@ -100,24 +98,44 @@ def detect_and_translate_if_needed(text: str, supported_langs: tuple = ("en", "p
     return text, lang
 
 def process_text_for_speech(text, use_phonemes=False):
+    """
+    Full pipeline to prepare text for TTS, returning (text, pitch, rate).
+    - Detects and translates language if needed
+    - Analyzes emotion
+    - Cleans and stylizes text
+    - Applies style-based modifications (consonant strength, vowel drag)
+    - Adjusts pitch, rate, tempo, and cleans tildes
+    """
+    # Language detection and translation
     text, lang = detect_and_translate_if_needed(text)
+
+    # Emotion analysis
     emotion = analyze_emotion(text)
     add_emotion_to_file(emotion)
+
+    # Text preprocessing
     text = preprocess_for_tts(text, emotion, lang)
     styles = get_voice_styles()
     style = emotion.lower() if emotion.lower() in styles else "neutral"
+
+    # Style-based modifications
     if styles.get(style, {}).get("consonant_strength", 1.0) != 1.0:
         text = apply_consonant_strength(text, style)
-        print(f"[Consonant Strength Applied] {text}")
     if styles.get(style, {}).get("vowel_drag", False) and not use_phonemes:
         text = emphasize_syllables_auto(text, styles[style].get("vowel_multiplier", 2))
-        print(f"[Vowel Drag (Text)] {text}")
+
+    # Intonation (optional, can be toggled or extended)
+    if styles.get(style, {}).get("intonation", False):
+        text = apply_intonation(text, style)
+
+    # Pitch and rate
     pitch, rate = adjust_pitch_rate(emotion)
-    print("[Original]        ", text)
-    text = adjust_tempo(text, emotion)
-    print("[Tempo]           ", text)
+
+    # Tempo and tilde cleaning
+    text = adjust_tempo(text, style)
     text = clean_tilde_tokens(text)
-    print("[Tilde Handling]  ", text)
+
+    # Final output
     return text, pitch, rate
 
 def remove_urls(text: str) -> str:
@@ -126,11 +144,89 @@ def remove_urls(text: str) -> str:
 def remove_inline_code(text: str) -> str:
     return re.sub(r'`[^`]+`', '', text)
 
+def load_emoji_speech_map():
+    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "config_emoji_speech_map.json")
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            print(f"[Emoji Speech Map] Loaded {len(data)} entries from {config_path}")
+            return data
+    except Exception as e:
+        print(f"[Emoji Speech Map] Failed to load: {e}")
+        return {}
+
+if not EMOJI_SPEECH_MAP:
+    EMOJI_SPEECH_MAP = load_emoji_speech_map()
+
+
+def emoji_to_speech(text, style=None):
+    import emoji
+    replaced = False
+    # Only print when a replacement happens for easier debugging
+    for tag, phrase in EMOJI_SPEECH_MAP.items():
+        if tag in text:
+            print(f"[Emoji2Speech] Replacing {tag} with {phrase}")
+            replaced = True
+        text = text.replace(tag, phrase)
+    # Remove emojis at the beginning
+    removed_start = False
+    while text and emoji.emoji_list(text[:2]):
+        first_emoji = emoji.emoji_list(text[:2])[0]['emoji']
+        if text.startswith(first_emoji):
+            print(f"[Emoji2Speech] Removing emoji at start: {first_emoji}")
+            text = text[len(first_emoji):].lstrip()
+            removed_start = True
+        else:
+            break
+    # Remove emojis at the end
+    removed_end = False
+    while text and emoji.emoji_list(text[-2:]):
+        last_emoji = emoji.emoji_list(text[-2:])[-1]['emoji']
+        if text.endswith(last_emoji):
+            print(f"[Emoji2Speech] Removing emoji at end: {last_emoji}")
+            text = text[:-len(last_emoji)].rstrip()
+            removed_end = True
+        else:
+            break
+    if not replaced and not removed_start and not removed_end:
+        print("[Emoji2Speech] No emojis replaced or removed.")
+    return text
+
+def safe_to_split(buffer: str, idx: int) -> bool:
+    """
+    Determines whether it's safe to split the buffer at the given punctuation index.
+    Avoids splitting inside file names, dot-words, or short emotional phrases.
+    """
+
+    # 1. Don't split if dot is part of known filename-style words
+    # Look back up to 20 chars before and 10 after
+    snippet = buffer[max(0, idx - 20):min(len(buffer), idx + 10)]
+
+    if re.search(r"\b\w{1,20}\.(exe|com|net|org|mp4|wav|zip|txt|avi|ogg)(\W|$)", snippet, re.IGNORECASE):
+        return False
+
+    # 2. Don't split short anime/emotional expressions (e.g., "Baka janai?")
+    pre = buffer[max(0, buffer.rfind(" ", 0, idx)):idx + 1].strip()
+    word_count = len(pre.split())
+    if word_count <= 4 and len(pre) <= 25:
+        if re.search(r"\b(baka|kuso|yabai|nani|sugoi|janai|urusai|eh|hm|ano|kya)\b", pre.lower()):
+            return False
+        if pre.isupper() or re.fullmatch(r"[A-Za-z!? ]+", pre):
+            return False
+
+    # 3. Don't split on lone emoji or symbol phrases
+    if re.fullmatch(r"[\W_]+", pre):  # e.g., "!!!", "*", "~"
+        return False
+
+    return True
+
 def handle_emoji(text: str, emotion: Optional[str]) -> str:
-    if emotion:
-        return emoji_to_speech(text, emotion)
-    else:
-        return emoji.demojize(text)
+    """
+    Remove or replace emojis in the text. Always use emoji_to_speech mapping, then remove any remaining emoji.
+    """
+    # Only print when debugging actual emoji replacements
+    result = emoji_to_speech(text)
+    return result
 
 def interpret_actions(text: str) -> str:
     return re.sub(r'\*([^\*]+)\*', lambda m: interpret_action(m.group(1)), text)
@@ -171,7 +267,9 @@ def preprocess_for_tts(text: str, emotion: Optional[str] = None, lang: Optional[
     Preprocess text for TTS: cleans up links, code, emojis, actions, and applies phonetic overrides.
     Returns a string suitable for TTS.
     """
+
     text = remove_urls(text)
+    text = remove_markers(text)
     text = remove_inline_code(text)
     text = handle_emoji(text, emotion)
     text = interpret_actions(text)
@@ -179,7 +277,10 @@ def preprocess_for_tts(text: str, emotion: Optional[str] = None, lang: Optional[
     text = ensure_punctuation(text)
     sentences = group_sentences(text)
     sentences = apply_phonetic_overrides(sentences, lang)
-    return ' '.join(sentences)
+    result = ' '.join(sentences)
+    # Replace '...' with a short pause token for TTS (e.g., comma or silence)
+    # You can use a comma, a single space, or a custom pause marker depending on your TTS model
+    return result
 
 def emphasize_syllables_auto(text: str, multiplier: int = 3) -> str:
     """
@@ -218,16 +319,6 @@ def stretch_vowels(syllable: str, multiplier: int = 3) -> str:
     """
     import re
     return re.sub(r"([aeiouáéíóúâêôãõAEIOU])", lambda m: m.group(1) * multiplier, syllable)
-
-def emoji_to_speech(text, style):
-    styles = get_voice_styles()
-    if style not in styles:
-        return text
-    demojized = emoji.demojize(text)
-    emoji_map = styles[style].get("emoji_map", {})
-    for tag, phrase in emoji_map.items():
-        demojized = demojized.replace(tag, phrase)
-    return demojized
 
 def apply_consonant_strength(text: str, style: str) -> str:
     styles = get_voice_styles()
@@ -293,12 +384,34 @@ def apply_vowel_drag(phonemes: list[str], original_text: str, style: Optional[st
                 styled.extend([ph] * 2)
     return ''.join(styled)
 
+import re
+
 def adjust_tempo(text: str, style: str) -> str:
+    """
+    Adjusts the pacing of the text based on the given voice style.
+    - Removes problematic '...' pauses.
+    - For 'fast', removes unnecessary pauses.
+    - For 'slow', adds light punctuation-based pauses without '...'.
+    """
     styles = get_voice_styles()
     tempo = styles.get(style, {}).get("tempo")
-    print("[TENPO]", tempo)
+
+    # Clean up '...' which causes TTS issues
+    text = text.replace("...", ".")
+
     if tempo == "slow":
-        return text.replace(" ", " ... ")
+        # Add natural pauses by inserting extra spaces or punctuation
+        # Add a short pause after commas, and ensure periods have double spaces
+        text = re.sub(r"([,;])", r"\1 ", text)  # Ensure space after commas/semicolons
+        text = re.sub(r"\.\s*", ".  ", text)    # Ensure periods lead to longer pauses
+        text = re.sub(r"\?(\s*)", r"?  ", text)  # Same for question marks
+        text = re.sub(r"!+", r"!  ", text)       # Same for exclamations
+
+    elif tempo == "fast":
+        # Remove extra spaces and slow-down markers to speed things up
+        text = re.sub(r"\s{2,}", " ", text)  # Collapse multiple spaces
+        text = text.replace(" - ", " ")      # Remove em-dash pauses
+
     return text
 
 def clean_tilde_tokens(text: str) -> str:
@@ -309,46 +422,102 @@ def clean_tilde_tokens(text: str) -> str:
     import re
     cleaned = re.sub(r'([a-zA-Z])~', r'\1\1', text)
     cleaned = cleaned.replace('~', '')
-    print("\n\033[95m================ Cleaned Text ================\033[0m")
-    print("\033[95m" + cleaned + "\033[0m")
-    print("\033[95m=============================================\033[0m\n")
     return cleaned
+
+def clean_artifacts(text: str) -> str:
+    """
+    Cleans up text for TTS:
+    - Removes decorative symbols (ASCII art, block symbols, emoji)
+    - Removes single-character punctuation-only artifacts
+    - Trims leading/trailing noisy characters
+    - Collapses repeated punctuation like "!!." or "?!?"
+    """
+
+    # Remove isolated punctuation-only responses
+    if text.strip() in [".", '"', "'", "…"]:
+        return ""
+
+    # Remove non-speakable symbols (Unicode category "So", "Sm", "Sk")
+    text = ''.join(
+        ch for ch in text
+        if unicodedata.category(ch) not in ("So", "Sm", "Sk")
+    )
+
+    # Optionally remove block/box drawing chars (like ┻━┻ ┬──┬)
+    text = re.sub(r"[\u2500-\u257F\u2580-\u259F\u25A0-\u25FF]+", "", text)
+
+    # Strip leading/trailing quotes, dots, ellipses
+    text = text.strip().strip('".\'…').strip()
+
+    # Collapse repeated punctuation (e.g. "!!.", "?!?")
+    text = re.sub(r"([.!?])\1+", r"\1", text)
+
+    # Normalize excessive whitespace
+    text = re.sub(r'\s{2,}', ' ', text)
+
+    return text
 
 def apply_intonation(text: str, style: str) -> str:
     """
     Apply intonation markers or transformations to the text based on the style.
-    Returns the modified text.
+    Avoids ellipsis and malformed punctuation that can degrade TTS output.
     """
-    style = style.lower()
+    style = style.lower().strip()
     text = text.strip()
     if not text:
         return text
+
     def ensure_ending(text: str, marker: str) -> str:
-        """Ensure the text ends with the given marker, replacing any existing punctuation ending."""
-        return text.rstrip('.!?') + marker
+        """Ensure the text ends cleanly with the given marker."""
+        return re.sub(r"[.?!…]*\s*$", marker, text)
+
+    # Playful / flirty
     if style in ["flirty", "playful", "curious", "inquisitive"]:
         return ensure_ending(text, "~?")
+    
+    # Angry or loud — use exclamations without uppercasing
     elif style in ["mad", "angry", "annoyance", "aggressive"]:
-        return text.upper() + "!!"
+        return ensure_ending(text, "!!")
+
+    # Confused tone
     elif style in ["confused", "uncertain"]:
         return ensure_ending(text, "??")
+
+    # Dramatic/emotional — use spaced punctuation for pauses
     elif style in ["dramatic", "emotional"]:
-        return text.replace(",", "...").replace(".", "!!!")
+        text = re.sub(r",\s*", " — ", text)
+        text = re.sub(r"\.\s*", "! ", text)
+        return ensure_ending(text, "!!")
+
+    # Robotic — flat, chopped pacing (periods only)
     elif style in ["robotic", "monotone"]:
-        return text.replace(",", "...").replace(".", "...")
-    elif style in ["caring", "compassionate"]:
+        text = re.sub(r",\s*", ". ", text)
+        text = re.sub(r"\.\s*", ". ", text)
         return ensure_ending(text, ".")
-    elif style in ["amused", "happy", "cheerful", "grateful"]:
+
+    # Gentle ending
+    elif style in ["caring", "compassionate", "remorse", "sad", "regret", "neutral", "default"]:
+        return ensure_ending(text, ".")
+
+    # Uplifting ending
+    elif style in ["amused", "happy", "cheerful", "grateful", "optimism", "hopeful"]:
         return ensure_ending(text, "!")
+
+    # Anxious/fearful — use question to imply uncertainty
     elif style in ["fear", "anxious"]:
-        return ensure_ending(text, "...?")
-    elif style in ["remorse", "sad", "regret"]:
-        return ensure_ending(text, ".")
-    elif style in ["optimism", "hopeful"]:
-        return ensure_ending(text, "!")
-    elif style in ["neutral", "default"]:
-        return ensure_ending(text, ".")
+        return ensure_ending(text, "?")
+
     return text
+
+def remove_markers(text: str) -> str:
+    """
+    Remove **double asterisks** used for emphasis, but keep inner text.
+    """
+    # Remove all pairs of ** around words or phrases
+    import re
+    # This regex finds **some text** and replaces with just some text
+    cleaned = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    return cleaned
 
 def adjust_pitch_rate(emotion: str) -> tuple[float, float]:
     """

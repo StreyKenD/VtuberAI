@@ -1,8 +1,10 @@
 import threading
 from vtuber_ai.core.config import load_config
 from vtuber_ai.core.response_gen import generate_response
+from ai.text_utils import process_text_for_speech
 from vtuber_ai.utils.text import clean_text
 from typing import List
+from lorebook.prompt_manager import build_full_prompt
 
 class ConversationService:
     def __init__(self):
@@ -10,6 +12,8 @@ class ConversationService:
         self.conversation_memory: List[str] = []
         self.lock = threading.Lock()
         self.max_memory_length = self.config["MAX_MEMORY_LENGTH"]
+        self.streamer_name = self.config.get("STREAMER_NAME", "Airi")
+        self.vtuber_personality = build_full_prompt(self.streamer_name)
 
     def add_user_message(self, message: str):
         with self.lock:
@@ -22,12 +26,12 @@ class ConversationService:
 
     def build_prompt(self) -> str:
         with self.lock:
-            prompt = self.config["VTUBER_PERSONALITY"] + "\n" + "\n".join(self.conversation_memory) + "\nAiri:"
+            prompt = self.vtuber_personality + "\n" + "\n".join(self.conversation_memory) + f"\n{self.streamer_name}:"
         return prompt
 
     def get_response(self, user_message: str) -> str:
         self.add_user_message(user_message)
         prompt = self.build_prompt()
-        response = generate_response(prompt, clean_text)
+        response = generate_response(prompt, process_text_for_speech)
         self.add_ai_message(response)
         return response

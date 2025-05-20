@@ -4,7 +4,8 @@ import threading
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+# Correct path to config.json in kitsu/config/config.json
+CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "config", "config.json"))
 _config_data = {}
 
 def load_config():

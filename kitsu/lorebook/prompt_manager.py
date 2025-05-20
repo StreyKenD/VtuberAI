@@ -1,7 +1,8 @@
 import os
 from langchain.prompts import PromptTemplate
 
-LOREBOOK_DIR = "lorebook"
+# Always use the directory of this file for lorebook files
+LOREBOOK_DIR = os.path.dirname(__file__)
 
 def load_prompt(filename: str) -> str:
     path = os.path.join(LOREBOOK_DIR, filename)
@@ -46,13 +47,13 @@ def build_full_prompt(streamer_name: str) -> str:
     full_prompt = "\n\n".join([
         templates["appearance"],
         templates["backstory"],
+        templates["personality"].format(streamer_name=streamer_name),
+        templates["goals"],
+        templates["relationship"],
         templates["chat_roles"],
         templates["emotional_modes"],
-        templates["goals"],
-        templates["patch_notes"],
-        templates["personality"],
-        templates["relationship"],
         templates["speech_style"],
+        templates["patch_notes"]
     ])
-
+    print("[DEBUG] Full prompt generated:\n", full_prompt)
     return full_prompt

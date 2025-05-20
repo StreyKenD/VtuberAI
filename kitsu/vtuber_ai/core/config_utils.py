@@ -5,8 +5,8 @@ def interpret_action(acao):
         "giggle": "hehe",
         "laugh": "haha",
         "sigh": "sigh",
-        "blushes": "hmm...",
-        "shrugs": "ehh..."
+        "blushes": "hmm",
+        "shrugs": "ehh"
     }
     return common_actions.get(acao.lower(), "")
 

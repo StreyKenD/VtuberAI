@@ -4,7 +4,7 @@ Configuration loader and constants for VTuber AI.
 import json
 import os
 
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "config.json")
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "config", "config.json")
 
 def load_config() -> dict:
     """Load the main configuration from config.json."""

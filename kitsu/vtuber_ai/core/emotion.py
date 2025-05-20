@@ -3,12 +3,17 @@ Emotion analysis and classification for VTuber AI.
 """
 from transformers.pipelines import pipeline
 from collections.abc import Iterable
+import torch
+
+# Use GPU if available
+device = 0 if torch.cuda.is_available() else -1
 
 # Initialize the GoEmotions classifier
 emotion_classifier = pipeline(
     "text-classification",
     model="bhadresh-savani/bert-base-go-emotion",
-    return_all_scores=True
+    top_k=None,
+    device=device
 )
 
 def analyze_emotion(text: str) -> str:

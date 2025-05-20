@@ -17,3 +17,7 @@ joy
 sadness
 excitement
 disapproval
+realization
+disgust
+anger
+disappointment
