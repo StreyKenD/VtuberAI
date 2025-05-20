@@ -3,7 +3,7 @@ LLM response generation for VTuber AI.
 """
 import json
 import requests
-from .tts_engine import speak_with_emotion
+from kitsu.ai.tts_module import speak_with_emotion
 
 def generate_response(prompt: str, process_text_for_speech) -> str:
     """

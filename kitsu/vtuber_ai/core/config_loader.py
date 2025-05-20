@@ -21,7 +21,7 @@ load_config()
 # Watchdog event handler
 class ConfigChangeHandler(FileSystemEventHandler):
     def on_modified(self, event):
-        if event.src_path.endswith("config.json"):
+        if str(event.src_path).endswith("config.json"):
             load_config()
 
 # Start the watchdog observer

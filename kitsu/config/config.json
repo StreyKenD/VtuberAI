@@ -7,5 +7,5 @@
     "rate_multiplier": 1.0
   },
   "MAX_MEMORY_LENGTH": 6,
-  "RESPONSE_BUFFER_THRESHOLD": 150,
+  "RESPONSE_BUFFER_THRESHOLD": 150
 }

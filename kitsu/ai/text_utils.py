@@ -2,11 +2,10 @@ import re
 import emoji
 from langdetect import detect
 from phonemizer import phonemize
+from typing import Optional
 
 # Local imports (grouped and ordered by module)
-from ..main import (
-    generate_response
-)
+from vtuber_ai.core.response_gen import generate_response
 
 from kitsu.vtuber_ai.core.emotion import (
     emotion_classifier,
@@ -62,12 +61,18 @@ def analyze_emotion(text: str) -> str:
     except TypeError:
         emotions = []
     # Check structure: emotions should be a list of lists of dicts
-    if emotions and isinstance(emotions[0], list) and emotions[0] and isinstance(emotions[0][0], dict) and 'label' in emotions[0][0]:
-        label = emotions[0][0]['label']
-        # If label is a tensor, convert to Python string
-        if hasattr(label, "item"):
-            return str(label.item())
-        return str(label)
+    if emotions and isinstance(emotions[0], list) and emotions[0]:
+        candidate = emotions[0][0]
+        label = None
+        # Try attribute access first (for objects/tensors), then dict access
+        if hasattr(candidate, 'label'):
+            label = getattr(candidate, 'label')
+        elif isinstance(candidate, dict) and 'label' in candidate.keys():
+            label = candidate.get('label')
+        if label is not None:
+            if hasattr(label, "item"):
+                return str(label.item())
+            return str(label)
     return "neutral"
 
 def ensure_supported_language(text: str, supported_langs: tuple = ("en", "pt", "ja")) -> tuple[str, str]:
@@ -115,21 +120,30 @@ def process_text_for_speech(text, use_phonemes=False):
     print("[Tilde Handling]  ", text)
     return text, pitch, rate
 
-def preprocess_for_tts(text: str, emotion: str = None, lang: str = None) -> str:
-    """
-    Preprocess text for TTS: cleans up links, code, emojis, actions, and applies phonetic overrides.
-    Returns a string suitable for TTS.
-    """
-    text = re.sub(r'https?://\S+', '[link]', text)
-    text = re.sub(r'`[^`]+`', '', text)
+def remove_urls(text: str) -> str:
+    return re.sub(r'https?://\S+', '[link]', text)
+
+def remove_inline_code(text: str) -> str:
+    return re.sub(r'`[^`]+`', '', text)
+
+def handle_emoji(text: str, emotion: Optional[str]) -> str:
     if emotion:
-        text = emoji_to_speech(text, emotion)
+        return emoji_to_speech(text, emotion)
     else:
-        text = ''.join(c for c in text if not emoji.is_emoji(c))
-    text = re.sub(r'\*(\w+)\*', lambda m: interpret_action(m.group(1)), text)
-    text = re.sub(r'[\x00-\x1F\x7F]', '', text)
+        return emoji.demojize(text)
+
+def interpret_actions(text: str) -> str:
+    return re.sub(r'\*([^\*]+)\*', lambda m: interpret_action(m.group(1)), text)
+
+def remove_control_chars(text: str) -> str:
+    return re.sub(r'[\x00-\x1F\x7F]', '', text)
+
+def ensure_punctuation(text: str) -> str:
     if text and text[-1] not in '.!?':
-        text += '.'
+        return text + '.'
+    return text
+
+def group_sentences(text: str) -> list[str]:
     sentences = re.split(r'(?<=[.!?]) +', text)
     sentences = [s.strip() for s in sentences if s.strip()]
     processed = []
@@ -143,11 +157,29 @@ def preprocess_for_tts(text: str, emotion: str = None, lang: str = None) -> str:
             buffer = s
     if buffer:
         processed.append(buffer)
+    return processed
+
+def apply_phonetic_overrides(sentences: list[str], lang: Optional[str]) -> list[str]:
     phonetic_overrides = get_phonetic_overrides()
     if lang is not None and phonetic_overrides.get(lang):
         for word, phon in phonetic_overrides[lang].items():
-            processed = [p.replace(word, phon) for p in processed]
-    return ' '.join(processed)
+            sentences = [re.sub(rf'\b{re.escape(word)}\b', phon, p) for p in sentences]
+    return sentences
+
+def preprocess_for_tts(text: str, emotion: Optional[str] = None, lang: Optional[str] = None) -> str:
+    """
+    Preprocess text for TTS: cleans up links, code, emojis, actions, and applies phonetic overrides.
+    Returns a string suitable for TTS.
+    """
+    text = remove_urls(text)
+    text = remove_inline_code(text)
+    text = handle_emoji(text, emotion)
+    text = interpret_actions(text)
+    text = remove_control_chars(text)
+    text = ensure_punctuation(text)
+    sentences = group_sentences(text)
+    sentences = apply_phonetic_overrides(sentences, lang)
+    return ' '.join(sentences)
 
 def emphasize_syllables_auto(text: str, multiplier: int = 3) -> str:
     """
@@ -222,7 +254,7 @@ def detect_language(text: str) -> str:
     except Exception:
         return "en"
 
-def prepare_phonemes(text: str, lang: str, style: str = None, emotion: str = None) -> str:
+def prepare_phonemes(text: str, lang: str, style: Optional[str] = None, emotion: Optional[str] = None) -> str:
     """
     Convert text to a sequence of phonemes, applying style-based vowel drag if needed.
     Returns a string of phonemes for the input text.
@@ -246,7 +278,7 @@ def prepare_phonemes(text: str, lang: str, style: str = None, emotion: str = Non
     print("🧬 Final Phonemes:", full_phoneme_sequence)
     return final_result
 
-def apply_vowel_drag(phonemes: list[str], original_text: str, style: str = None) -> str:
+def apply_vowel_drag(phonemes: list[str], original_text: str, style: Optional[str] = None) -> str:
     styles = get_voice_styles()
     if not style or not styles.get(style, {}).get("vowel_drag", False):
         return ' '.join(phonemes)
@@ -359,7 +391,7 @@ def word_to_phonemes(word: str, lang: str) -> str:
     }
     resolved_lang = lang_map.get(lang)
     phonetic_overrides = get_phonetic_overrides()
-    override = phonetic_overrides.get(lang, {}).get(word)
+    override = phonetic_overrides.get(lang, {}).get(word) if phonetic_overrides.get(lang) else None
     input_word = override if override else word
     if not resolved_lang:
         print(f"[Phonemizer Error]: Unsupported language '{lang}' for word '{word}'")
@@ -373,7 +405,8 @@ def word_to_phonemes(word: str, lang: str) -> str:
             preserve_punctuation=True
         )
         if isinstance(phonemes, list):
-            phonemes = " ".join(phonemes)
+            # Ensure all elements are str before joining
+            phonemes = " ".join(str(p) for p in phonemes if isinstance(p, str))
         return phonemes
     except Exception as e:
         print(f"[Phonemizer Error]: {e}")
