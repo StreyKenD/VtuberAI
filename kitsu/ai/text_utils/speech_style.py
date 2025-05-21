@@ -1,8 +1,13 @@
 import re
 import emoji
 from typing import Optional
-from . import VOICE_STYLE_DEFAULTS, COMMON_ACTIONS, PHONETIC_OVERRIDES
 from .cleaning import load_emoji_speech_map
+from vtuber_ai.core.config_manager import Config
+
+config = Config()
+VOICE_STYLE_DEFAULTS = config.voice_style_defaults()
+PHONETIC_OVERRIDES = config.phonetic_overrides()
+COMMON_ACTIONS = config.commom_actions()
 
 EMOJI_SPEECH_MAP = load_emoji_speech_map()
 

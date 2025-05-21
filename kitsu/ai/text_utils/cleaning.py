@@ -2,8 +2,6 @@ import os
 import re
 import json
 import unicodedata
-from typing import Optional
-
 
 def remove_urls(text: str) -> str:
     return re.sub(r'https?://\S+', '[link]', text)
@@ -48,7 +46,8 @@ def clean_artifacts(text: str) -> str:
     return text
 
 def load_emoji_speech_map():
-    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "config_emoji_speech_map.json")
+    # Correct path: kitsu/config/config_emoji_speech_map.json
+    config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config", "config_emoji_speech_map.json")
     with open(config_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     return data

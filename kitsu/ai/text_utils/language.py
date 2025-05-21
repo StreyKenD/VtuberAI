@@ -1,12 +1,11 @@
 from langdetect import detect
-from . import VOICE_STYLE_DEFAULTS, PHONETIC_OVERRIDES, COMMON_ACTIONS
-from .preprocessor import process_text_for_speech
-from kitsu.vtuber_ai.core.response_gen import generate_response
 
 def translate_to_english(text: str) -> str:
     """
     Translate the input text to English using the LLM response pipeline.
     """
+    from vtuber_ai.core.response_gen import generate_response
+    from .preprocessor import process_text_for_speech
     prompt = f"Please rephrase the following in English for a VTuber to say aloud: {text}"
     return generate_response(prompt, process_text_for_speech=process_text_for_speech)
 

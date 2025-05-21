@@ -1,5 +1,4 @@
 import os
-from langchain.prompts import PromptTemplate
 from pathlib import Path
 import json
 
@@ -18,7 +17,8 @@ def get_prompt_templates():
     if _TEMPLATE_CACHE is not None:
         return _TEMPLATE_CACHE
 
-    folder = Path("data/prompts")
+    # Use the lorebook directory for prompt files
+    folder = Path(LOREBOOK_DIR)
     if not folder.exists():
         raise FileNotFoundError(f"Prompt folder not found: {folder}")
 
@@ -33,18 +33,26 @@ def get_prompt_templates():
 
 def build_full_prompt(streamer_name: str) -> str:
     templates = get_prompt_templates()
-    
+    # Map the correct file to the expected key
+    personality = templates.get("personality", templates.get("personality_and_tone", ""))
+    if not personality:
+        raise KeyError("Neither 'personality' nor 'personality_and_tone' prompt found.")
+    # Use 'relationship_with_creator' if 'relationship' is missing
+    relationship = templates.get("relationship", templates.get("relationship_with_creator", ""))
+    if not relationship:
+        raise KeyError("Neither 'relationship' nor 'relationship_with_creator' prompt found.")
     # Combine all parts into one big prompt string
     full_prompt = "\n\n".join([
         templates["appearance"],
         templates["backstory"],
-        templates["personality"].format(streamer_name=streamer_name),
+        personality.format(streamer_name=streamer_name),
         templates["goals"],
-        templates["relationship"],
+        relationship,
         templates["chat_roles"],
         templates["emotional_modes"],
         templates["speech_style"],
-        templates["patch_notes"]
+        templates["patch_notes"],
+        templates["response_format_rules"],
     ])
     print("[DEBUG] Full prompt generated:\n", full_prompt)
     return full_prompt

@@ -1,12 +1,16 @@
 import re
 from typing import Optional, Sequence
 from phonemizer import phonemize
-from . import VOICE_STYLE_DEFAULTS, PHONETIC_OVERRIDES, DIC_PT, DIC_EN
+from vtuber_ai.core.config_manager import Config
+import pyphen
+
+config = Config()
+VOICE_STYLE_DEFAULTS = config.voice_style_defaults()
+PHONETIC_OVERRIDES = config.phonetic_overrides()
 from .speech_style import apply_vowel_drag
 
-dic_pt = DIC_PT
-dic_en = DIC_EN
-
+dic_pt = pyphen.Pyphen(lang='pt_BR')
+dic_en = pyphen.Pyphen(lang='en_US')
 
 def emphasize_syllables_portuguese(text: str, multiplier: int = 3) -> str:
     def emphasize_word(word):

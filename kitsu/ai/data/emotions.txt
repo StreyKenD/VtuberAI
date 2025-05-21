@@ -1,0 +1,6 @@
+neutral
+disapproval
+admiration
+curiosity
+caring
+gratitude

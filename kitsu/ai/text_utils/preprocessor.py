@@ -2,9 +2,11 @@ from typing import Optional
 from .cleaning import remove_urls, remove_inline_code, remove_control_chars
 from .speech_style import handle_emoji, interpret_actions, apply_consonant_strength, apply_intonation, adjust_pitch_rate, adjust_tempo, apply_phonetic_overrides, remove_markers, ensure_punctuation, clean_tilde_tokens
 from .phonemes import group_sentences, emphasize_syllables
-from .language import detect_and_translate_if_needed
 from .emotion import analyze_emotion, add_emotion_to_file
-from . import VOICE_STYLE_DEFAULTS
+from vtuber_ai.core.config_manager import Config
+
+config = Config()
+VOICE_STYLE_DEFAULTS = config.voice_style_defaults()
 
 def preprocess_for_tts(text: str, emotion: Optional[str] = None, lang: Optional[str] = None) -> str:
     """
@@ -36,6 +38,7 @@ def process_text_for_speech(text, use_phonemes=False):
     - Adjusts pitch, rate, tempo, and cleans tildes
     """
     # Language detection and translation
+    from .language import detect_and_translate_if_needed
     text, lang = detect_and_translate_if_needed(text)
 
     # Emotion analysis

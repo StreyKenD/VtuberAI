@@ -2,14 +2,14 @@
 """
 TTS (Text-to-Speech) related functions for VTuber AI.
 """
-import random
 import tempfile
 import torch
 from TTS.api import TTS
 from typing import Callable, Optional
 import soundfile as sf
+import logging
 
-from kitsu.ai.text_utils import clean_artifacts  # Add this import for reading wav files
+from ai.text_utils.cleaning import clean_artifacts  # Add this import for reading wav files
 
 from .audio_module import StreamingAudioPlayer
 from vtuber_ai.core.config_manager import Config
@@ -34,7 +34,7 @@ def get_tts() -> TTS:
     if tts is not None:
         return tts
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"[INFO] Loading TTS model on device: {device}")
+    logging.info(f"Loading TTS model on device: {device}")
     tts_instance = TTS(model_name="tts_models/en/vctk/vits")
     tts_instance.to(device)
     tts = tts_instance
@@ -48,31 +48,25 @@ def choose_voice() -> str:
 
 def speak_with_emotion(
     text: str,
-    process_text_for_speech: Callable[[str], tuple[str, float, float]]
+    process_text_for_speech: Callable[[str,], tuple[str, float, float]]
 ) -> None:
     """
-    Synthesize speech with emotion and enqueue the resulting audio file for playback.
-
-    Args:
-        text: The text to synthesize.
-        process_text_for_speech: Function to process text and return (text, pitch, rate).
+    Synthesize speech with emotion and play the resulting audio file using audio_module.
     """
     global tts, llm_outputs
-    print(f"[TTS DEBUG] speak_with_emotion called with text: {text}")
-    # Print the full original text received from the LLM before any processing
-    # Skip TTS if text is just a single dot or only whitespace
+    logging.debug(f"speak_with_emotion called with text: {text}")
     text = clean_artifacts(text)
     if tts is None:
         tts = get_tts()
     try:
         result = process_text_for_speech(text)
         text, pitch, rate = result
-        print(f"[TTS DEBUG] processed_text: {text}, pitch: {pitch}, rate: {rate}")
-        print(f"[TTS] FULL TTS SENT: {text}")  # Print the full TTS text before synthesis
+        logging.debug(f"processed_text: {text}, pitch: {pitch}, rate: {rate}")
+        logging.info(f"FULL TTS SENT: {text}")
         current_voice = choose_voice()
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_wav:
             file_path = temp_wav.name
-        print(f"[TTS DEBUG] Synthesizing to file: {file_path}")
+        logging.debug(f"Synthesizing to file: {file_path}")
         tts.tts_to_file(
             text=text,
             use_phonemes=True,
@@ -82,23 +76,25 @@ def speak_with_emotion(
             rate=rate
         )
         llm_outputs += text + "\n"
-        print(f"[TTS DEBUG] Synthesis complete, file saved: {file_path}")
+        logging.debug(f"Synthesis complete, file saved: {file_path}")
         try:
-            audio, sr = sf.read(file_path, dtype='float32')
+            result = sf.read(file_path, dtype='float32')
+            if result is None or not isinstance(result, tuple) or len(result) != 2:
+                raise RuntimeError(f"Failed to read audio file: {file_path}")
+            audio, sr = result
             if audio.ndim == 1:
                 audio = audio.reshape(-1, 1)
             if audio.shape[1] > 1:
                 audio = audio[:, 0:1]
             player.enqueue(audio)
-            print(f"[TTS DEBUG] Audio enqueued for playback.")
+            logging.debug(f"Audio enqueued for playback.")
         except Exception as e:
-            print(f"[TTS DEBUG] Error loading or playing audio: {e}")
+            logging.error(f"Error loading or playing audio: {e}")
         try:
             import os
             os.remove(file_path)
         except Exception as e:
-            print(f"[TTS DEBUG] Could not delete temp file: {e}")
+            logging.warning(f"Could not delete temp file: {e}")
     except Exception as e:
-        print(f"[TTS error]: {e}")
-
-    print(f"[TTS] FULL LLM OUTPUT: {llm_outputs}")
+        logging.error(f"[TTS error]: {e}")
+    logging.info(f"FULL LLM OUTPUT: {llm_outputs}")

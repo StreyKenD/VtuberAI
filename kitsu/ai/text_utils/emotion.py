@@ -1,6 +1,5 @@
 import os
-from kitsu.vtuber_ai.core.emotion import emotion_classifier
-from . import VOICE_STYLE_DEFAULTS, PHONETIC_OVERRIDES, COMMON_ACTIONS
+from vtuber_ai.core.emotion import emotion_classifier
 
 _emotion_cache = set()
 

@@ -7,9 +7,6 @@ from typing import Any
 # Set your config path here (edit if needed)
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "config.json"
 
-_config_data: dict[str, Any] = {}
-_config_lock = threading.Lock()
-
 def _load_config_file() -> dict:
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -17,6 +14,10 @@ def _load_config_file() -> dict:
     except Exception as e:
         print(f"[CONFIG LOAD ERROR] {e}")
         return {}
+
+_config_data: dict[str, Any] = {}
+_config_data.update(_load_config_file())
+_config_lock = threading.Lock()
 
 def _watch_config_file(interval=2):
     last_content = None
@@ -41,9 +42,20 @@ def start_config_watcher():
 
 class Config:
     @staticmethod
-    def get(key: str, default: Any = None) -> Any:
+    def get(key: str, default: Any = None, warn: bool = True) -> Any:
         with _config_lock:
-            return _config_data.get(key, default)
+            value = _config_data.get(key, default)
+            if warn and value is default:
+                print(f"[WARN] Config key '{key}' not found. Using default: {default}")
+            return value
+        
+    @staticmethod
+    def reload():
+        data = _load_config_file()
+        with _config_lock:
+            _config_data.clear()
+            _config_data.update(data)
+            print("[✓] Config manually reloaded.")
 
     # Direct accessors for important configs:
     @staticmethod
@@ -99,3 +111,7 @@ class Config:
     def get_all() -> dict:
         with _config_lock:
             return dict(_config_data)
+        
+if not _config_data:
+    print("[WARNING] Config file is empty or failed to load.")
+

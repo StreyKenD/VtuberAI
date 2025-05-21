@@ -1,5 +1,7 @@
 # VtuberAI
 
+CREATE ORE LOGS AND EXCEPTION THROWS AND CHECK LOGGING
+
 > **NOTE:** This project is under active development. Some features and integrations are still experimental or planned. See the roadmap and TODOs below.
 
 ## Overview

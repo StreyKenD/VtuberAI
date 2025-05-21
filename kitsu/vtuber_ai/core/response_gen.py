@@ -1,11 +1,8 @@
 """
 LLM response generation for VTuber AI.
 """
-import json
-import requests
-import time
 from ai.tts_module import speak_with_emotion
-from kitsu.ai.text_utils import safe_to_split
+from ai.text_utils import safe_to_split
 
 def generate_response(prompt: str, process_text_for_speech) -> str:
     """

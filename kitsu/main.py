@@ -1,8 +1,5 @@
-import subprocess
 import sys
-import time
 import logging
-import requests
 from vtuber_ai.services.console_app import ConsoleApp
 from vtuber_ai.services.ollama_manager import start_ollama, get_ollama_exit_code
 
