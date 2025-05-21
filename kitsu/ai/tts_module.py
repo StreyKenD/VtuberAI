@@ -9,10 +9,13 @@ from TTS.api import TTS
 from typing import Callable, Optional
 import soundfile as sf
 
-from ai.text_utils import clean_artifacts  # Add this import for reading wav files
+from kitsu.ai.text_utils import clean_artifacts  # Add this import for reading wav files
 
 from .audio_module import StreamingAudioPlayer
-from vtuber_ai.core.config import load_config
+from vtuber_ai.core.config_manager import Config
+
+config = Config()
+FEMALE_VOICES = config.female_voices()
 
 player = StreamingAudioPlayer(sample_rate=24000, channels=1)
 player.start()
@@ -20,11 +23,10 @@ player.start()
 tts: Optional[TTS] = None  # Should be set by main app
 female_voices: Optional[list[str]] = None  # Should be set by main app
 
-config = load_config()
-FEMALE_VOICES = config["FEMALE_VOICES"]
-
 # Module-level variable to store all LLM outputs
 llm_outputs = ""
+
+TTS_MODEL = getattr(config, "TTS_MODEL", None)
 
 def get_tts() -> TTS:
     """Return a singleton TTS instance with the default model, using GPU if available."""

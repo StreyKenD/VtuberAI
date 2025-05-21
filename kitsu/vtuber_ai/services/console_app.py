@@ -7,14 +7,8 @@ from typing import List
 def user_prompt() -> str:
     return input("\033[94mYou: \033[0m")
 
-def vtuber_response(conversation_service: ConversationService, question: str) -> str:
-    logging.info('Airi is thinking...')
-    response = conversation_service.get_response(question)
-    return response
-
 class ConsoleApp:
     def __init__(self):
-        self.history: List[str] = []
         self.conversation_service = ConversationService()
 
     def run(self):
@@ -34,24 +28,23 @@ class ConsoleApp:
                     continue
                 elif cmd == "/clear":
                     self.conversation_service.conversation_memory.clear()
-                    self.history.clear()
                     print("\033[92m[INFO] Conversation history cleared.\033[0m")
                     continue
                 elif cmd == "/history":
-                    if not self.history:
+                    if not self.conversation_service.conversation_memory:
                         print("\033[92m[INFO] No conversation history yet.\033[0m")
                     else:
                         print("\033[92m--- Conversation History ---\033[0m")
-                        for line in self.history:
+                        for line in self.conversation_service.conversation_memory:
                             print(line)
                         print("\033[92m---------------------------\033[0m")
                     continue
                 try:
-                    response = vtuber_response(self.conversation_service, pergunta)
+                    response = ConversationService.get_response(self.conversation_service, pergunta)
                     log_chat(pergunta, response)
                     print("\033[93mAiri:\033[0m", response)
-                    self.history.append(f"You: {pergunta}")
-                    self.history.append(f"Airi: {response}")
+                    self.conversation_service.conversation_memory.append(f"You: {pergunta}")
+                    self.conversation_service.conversation_memory.append(f"Airi: {response}")
                 except Exception as e:
                     logging.error(f"Error during response generation: {e}")
                     print("\033[91m[ERROR] Something went wrong. Please try again.\033[0m")

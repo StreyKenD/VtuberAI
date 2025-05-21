@@ -3,13 +3,14 @@ File operations utilities for VTuber AI.
 """
 from datetime import datetime
 import os
+from typing import Optional
 
-def log_chat(question: str, response: str, filename: str = "default") -> None:
+def log_chat(question: str, response: str, filename: Optional[str] = None):
     """
     Log a chat interaction to a file with a timestamp.
     Always writes to kitsu/data/chat_log.txt by default.
     """
-    if filename == "default":
+    if filename is None:
         data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
         os.makedirs(data_dir, exist_ok=True)
         filename = os.path.join(data_dir, "chat_log.txt")

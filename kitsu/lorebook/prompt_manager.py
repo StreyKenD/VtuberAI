@@ -1,8 +1,12 @@
 import os
 from langchain.prompts import PromptTemplate
+from pathlib import Path
+import json
 
 # Always use the directory of this file for lorebook files
 LOREBOOK_DIR = os.path.dirname(__file__)
+
+_TEMPLATE_CACHE = None
 
 def load_prompt(filename: str) -> str:
     path = os.path.join(LOREBOOK_DIR, filename)
@@ -10,35 +14,22 @@ def load_prompt(filename: str) -> str:
         return f.read()
 
 def get_prompt_templates():
-    # Load raw text from files
-    appearance = load_prompt("appearance.txt")
-    backstory = load_prompt("backstory.txt")
-    chat_roles = load_prompt("chat_roles.txt")
-    emotional_modes = load_prompt("emotional_modes.txt")
-    goals = load_prompt("goals.txt")
-    patch_notes = load_prompt("patch_notes.txt")
-    personality_template = load_prompt("personality_and_tone.txt")
-    relationship = load_prompt("relationship_with_creator.txt")
-    speech_style = load_prompt("speech_style.txt")
+    global _TEMPLATE_CACHE
+    if _TEMPLATE_CACHE is not None:
+        return _TEMPLATE_CACHE
 
-    # Create PromptTemplate objects for parts that might have variables
-    personality = PromptTemplate(
-        input_variables=["streamer_name"],
-        template=personality_template,
-    )
+    folder = Path("data/prompts")
+    if not folder.exists():
+        raise FileNotFoundError(f"Prompt folder not found: {folder}")
 
-    # Other parts can be plain strings if no variables needed
-    return {
-        "appearance": appearance,
-        "backstory": backstory,
-        "chat_roles": chat_roles,
-        "emotional_modes": emotional_modes,
-        "goals": goals,
-        "patch_notes": patch_notes,
-        "personality": personality,
-        "relationship": relationship,
-        "speech_style": speech_style,
-    }
+    templates = {}
+    for file in folder.glob("*.txt"):
+        templates[file.stem] = file.read_text(encoding="utf-8").strip()
+    for file in folder.glob("*.json"):
+        templates[file.stem] = json.loads(file.read_text(encoding="utf-8"))
+
+    _TEMPLATE_CACHE = templates
+    return _TEMPLATE_CACHE
 
 def build_full_prompt(streamer_name: str) -> str:
     templates = get_prompt_templates()

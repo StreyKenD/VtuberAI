@@ -5,7 +5,7 @@ import json
 import requests
 import time
 from ai.tts_module import speak_with_emotion
-from ai.text_utils import safe_to_split
+from kitsu.ai.text_utils import safe_to_split
 
 def generate_response(prompt: str, process_text_for_speech) -> str:
     """
@@ -30,14 +30,6 @@ def generate_response(prompt: str, process_text_for_speech) -> str:
 
     buffer = ""
     full_response = ""
-
-    def safe_to_split(buffer: str, i: int) -> bool:
-        """Avoid splitting inside filenames like kitsu.exe or example.com"""
-        context_window = buffer[max(0, i-10):i+10].lower()
-        import re
-        if re.search(r"\b\w+\.(exe|com|net|org|mp4|wav|zip|txt)\b", context_window):
-            return False
-        return True
 
     def handle_line_split(text: str):
         """Split text by line breaks and punctuation safely."""
@@ -68,6 +60,7 @@ def generate_response(prompt: str, process_text_for_speech) -> str:
                 if leftover:
                     print(f"[DEBUG] Speaking chunk: {leftover}")
                     speak_with_emotion(leftover, process_text_for_speech)
+
 
     for line in response.iter_lines():
         if line:
