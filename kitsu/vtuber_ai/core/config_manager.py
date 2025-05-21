@@ -6,6 +6,8 @@ from typing import Any
 
 # Set your config path here (edit if needed)
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "config.json"
+PHONETICS_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "config_phonetics.json"
+EMOJI_SPEECH_MAP_PATH = Path(__file__).resolve().parents[2] / "config" / "config_emoji_speech_map.json"
 
 def _load_config_file() -> dict:
     try:
@@ -14,10 +16,38 @@ def _load_config_file() -> dict:
     except Exception as e:
         print(f"[CONFIG LOAD ERROR] {e}")
         return {}
+    
+def _load_phonetics_config_file() -> dict:
+    """
+    Load the phonetics configuration from config_phonetics.json.
+    """
+    try:
+        with open(PHONETICS_CONFIG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print(f"[WARNING] Phonetics config file not found: {PHONETICS_CONFIG_PATH}")
+        return {}
+    except Exception as e:
+        print(f"[ERROR] Failed to load phonetics config: {e}")
+        return {}
+    
+def _load_emoji_speech_map_file() -> dict:
+    try:
+        with open(EMOJI_SPEECH_MAP_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print(f"[WARNING] Emoji speech map file not found: {EMOJI_SPEECH_MAP_PATH}")
+        return {}
+    except Exception as e:
+        print(f"[ERROR] Failed to load emoji speech map: {e}")
+        return {}
 
+_emoji_speech_map_data: dict[str, Any] = _load_emoji_speech_map_file()
 _config_data: dict[str, Any] = {}
 _config_data.update(_load_config_file())
 _config_lock = threading.Lock()
+
+_phonetics_data: dict[str, Any] = _load_phonetics_config_file()
 
 def _watch_config_file(interval=2):
     last_content = None
@@ -57,14 +87,19 @@ class Config:
             _config_data.update(data)
             print("[✓] Config manually reloaded.")
 
-    # Direct accessors for important configs:
-    @staticmethod
-    def emoji_map() -> dict:
-        return Config.get("emoji_speech_map", {})
-
     @staticmethod
     def phonetic_overrides() -> dict:
-        return Config.get("PHONETIC_OVERRIDES", {})
+        """
+        Retrieves custom phonetic mappings from config_phonetics.json.
+        """
+        return _phonetics_data
+    
+    @staticmethod
+    def emoji_map() -> dict:
+        """
+        Retrieves emoji speech mappings from config_emoji_speech_map.json.
+        """
+        return _emoji_speech_map_data
 
     @staticmethod
     def commom_actions() -> dict:
@@ -73,7 +108,7 @@ class Config:
 
     @staticmethod
     def streamer_name() -> str:
-        return Config.get("STREAMER_NAME", "Airi")
+        return Config.get("STREAMER_NAME", "Kitsu.exe")
 
     @staticmethod
     def max_memory_length() -> int:

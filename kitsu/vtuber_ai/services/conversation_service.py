@@ -6,7 +6,7 @@ from vtuber_ai.core.config_manager import Config
 from vtuber_ai.core.response_gen import generate_response
 from ai.text_utils import process_text_for_speech
 from vtuber_ai.utils.text import clean_text
-from lorebook.prompt_manager import build_full_prompt, load_lorebook, PREDEFINED_KEYWORDS, get_lore_for_keywords
+from lorebook.prompt_manager import build_full_prompt, load_lorebook, PREDEFINED_KEYWORDS, get_lore_injections, LOREBOOK
 from ai.memory_module import ConversationMemory
 
 # Ensure logging is configured to show INFO and DEBUG messages in the terminal
@@ -29,6 +29,7 @@ class ConversationService:
 
         # Load the lorebook at startup
         load_lorebook()
+        self.keywords = PREDEFINED_KEYWORDS  # Initialize keywords from the lorebook
 
     def add_user_message(self, message: str) -> None:
         """
@@ -54,6 +55,7 @@ class ConversationService:
         for entry in LOREBOOK:
             if entry["trigger"].lower() in message.lower():
                 triggers.append(entry["trigger"])
+        logging.debug(f"Extracted triggers from message '{message}': {triggers}")
         return triggers
 
     def build_prompt(self, user_message: str) -> str:
@@ -73,10 +75,10 @@ class ConversationService:
         if before_history_lore:
             sections.append(f"[LORE BEFORE HISTORY]\n" + "\n".join(before_history_lore))
 
-        if self.memory.summary:
+        if hasattr(self.memory, "summary") and self.memory.summary:
             sections.append(f"[SUMMARY]\n{self.memory.summary.strip()}")
 
-        if self.memory.facts:
+        if hasattr(self.memory, "facts") and self.memory.facts:
             facts_section = "[KNOWN FACTS]\n" + "\n".join(
                 f"- {k}: {v}" for k, v in self.memory.facts.items()
             )
@@ -93,7 +95,7 @@ class ConversationService:
         sections.append(f"[PERSONALITY]\n{self.vtuber_personality.strip()}")
 
         full_prompt = "\n\n".join(sections) + f"\n\n{AI_NAME}:"
-        logging.debug("Prompt built successfully.")
+        logging.debug(f"Prompt built successfully with {len(sections)} sections.")
         return full_prompt
 
     def get_response(self, user_message: str) -> str:
@@ -112,7 +114,7 @@ class ConversationService:
 
         except Exception as e:
             logging.exception(f"Error generating response: {e}")
-            return "Sorry, something went wrong."
+            return "I'm sorry, I encountered an issue while processing your request. Please try again."
 
     def extract_keywords(self, message: str) -> list[str]:
         """

@@ -4,3 +4,6 @@ admiration
 curiosity
 caring
 gratitude
+confusion
+amusement
+sadness

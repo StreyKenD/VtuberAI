@@ -5,8 +5,10 @@ import logging
 
 # Always use the directory of this file for lorebook files
 LOREBOOK = []
-
-LOREBOOK_PATH = Path(__file__).parent / "lorebook.json"
+PREDEFINED_KEYWORDS = []
+_TEMPLATE_CACHE = None
+LOREBOOK_DIR = Path(__file__).parent
+LOREBOOK_PATH = LOREBOOK_DIR / "lorebook.json"
 
 def load_lorebook() -> list[dict]:
     """
@@ -14,8 +16,9 @@ def load_lorebook() -> list[dict]:
     """
     try:
         with open(LOREBOOK_PATH, "r", encoding="utf-8") as f:
-            global LOREBOOK
+            global LOREBOOK, PREDEFINED_KEYWORDS
             LOREBOOK = json.load(f)
+            PREDEFINED_KEYWORDS = [entry["trigger"] for entry in LOREBOOK]  # Extract triggers
             return LOREBOOK
     except FileNotFoundError:
         logging.warning(f"Lorebook file not found: {LOREBOOK_PATH}")
@@ -23,23 +26,28 @@ def load_lorebook() -> list[dict]:
     except Exception as e:
         logging.error(f"Error loading lorebook: {e}")
         return []
-    
-def get_lore_for_keywords(keywords: list[str]) -> str:
+
+def get_lore_injections(triggers: list[str], position: str) -> list[str]:
     """
-    Retrieve lore entries for the given keywords.
+    Retrieve lore injections based on triggers and position.
     """
-    lorebook = load_lorebook()
-    lore_entries = [lorebook[key] for key in keywords if key in lorebook]
-    return "\n".join(lore_entries)
+    injections = []
+    for entry in LOREBOOK:
+        # Check if any trigger in the entry matches any trigger in the input list
+        if any(t.lower() in [trigger.lower() for trigger in triggers] for t in entry["trigger"]) and entry["position"] == position:
+            injections.append((entry["priority"], entry["injection"]))
+    # Sort by priority and return only the injections
+    logging.debug(f"Lore injections for position '{position}': {len(injections)} found.")
+    return [injection for _, injection in sorted(injections, key=lambda x: x[0])]
 
 def load_prompt(filename: str) -> str:
     path = os.path.join(LOREBOOK_DIR, filename)
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
 
-def get_prompt_templates():
+def get_prompt_templates(force_refresh: bool = False):
     global _TEMPLATE_CACHE
-    if _TEMPLATE_CACHE is not None:
+    if _TEMPLATE_CACHE is not None and not force_refresh:
         return _TEMPLATE_CACHE
 
     # Use the lorebook directory for prompt files
@@ -66,26 +74,32 @@ def build_full_prompt(streamer_name: str, keywords: list[str] = []) -> str:
     personality = templates.get("personality", templates.get("personality_and_tone", ""))
     if not personality:
         raise KeyError("Neither 'personality' nor 'personality_and_tone' prompt found.")
+    try:
+        personality = personality.format(streamer_name=streamer_name)
+    except KeyError as e:
+        raise KeyError(f"Missing placeholder in personality template: {e}")
+
     # Use 'relationship_with_creator' if 'relationship' is missing
     relationship = templates.get("relationship", templates.get("relationship_with_creator", ""))
     if not relationship:
         raise KeyError("Neither 'relationship' nor 'relationship_with_creator' prompt found.")
     
     # Retrieve lore for the given keywords
-    lore = get_lore_for_keywords(keywords)
+    lore = get_lore_injections(keywords, "before_prompt")
 
     # Combine all parts into one big prompt string
     full_prompt = "\n\n".join([
-        templates["appearance"],
-        templates["backstory"],
-        personality.format(streamer_name=streamer_name),
-        templates["goals"],
+        templates.get("appearance", ""),
+        templates.get("backstory", ""),
+        personality,
+        templates.get("goals", ""),
         relationship,
-        templates["chat_roles"],
-        templates["emotional_modes"],
-        templates["speech_style"],
-        templates["patch_notes"],
-        templates["response_format_rules"],
+        templates.get("chat_roles", ""),
+        templates.get("emotional_modes", ""),
+        templates.get("speech_style", ""),
+        templates.get("patch_notes", ""),
+        templates.get("response_format_rules", ""),
+        "\n".join(lore)  # Join lore list into a string
     ])
-    print("[DEBUG] Full prompt generated:\n", full_prompt)
+    logging.debug(f"[DEBUG] Full prompt generated (truncated):\n{full_prompt[:500]}...")
     return full_prompt

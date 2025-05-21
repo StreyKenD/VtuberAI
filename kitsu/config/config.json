@@ -6,6 +6,7 @@
     "pitch_multiplier": 1.0,
     "rate_multiplier": 1.0
   },
+  "STREAMER_NAME": "Kitsu.exe",
   "MAX_MEMORY_LENGTH": 6,
   "RESPONSE_BUFFER_THRESHOLD": 150,
   "COMMOM_ACTIONS": {
