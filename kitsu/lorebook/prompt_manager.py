@@ -92,12 +92,9 @@ def build_full_prompt(streamer_name: str, keywords: list[str] = []) -> str:
         templates.get("appearance", ""),
         templates.get("backstory", ""),
         personality,
-        templates.get("goals", ""),
         relationship,
-        templates.get("chat_roles", ""),
-        templates.get("emotional_modes", ""),
+        # templates.get("emotional_modes", ""), # create current emotional mode
         templates.get("speech_style", ""),
-        templates.get("patch_notes", ""),
         templates.get("response_format_rules", ""),
         "\n".join(lore)  # Join lore list into a string
     ])
