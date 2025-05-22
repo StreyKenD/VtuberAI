@@ -1,5 +1,8 @@
 import os
 from vtuber_ai.core.emotion import emotion_classifier
+import logging
+
+logger = logging.getLogger(__name__)
 
 _emotion_cache = set()
 
@@ -49,4 +52,4 @@ def add_emotion_to_file(emotion: str, filename: str = "default") -> None:
         with open(filename, "a", encoding="utf-8") as f:
             f.write(emotion + "\n")
         _emotion_cache.add(emotion)
-        print(f"Added new emotion: {emotion}")
+        logger.info(f"Added new emotion: {emotion}")

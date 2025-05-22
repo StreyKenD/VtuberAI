@@ -3,6 +3,9 @@ import threading
 import time
 from pathlib import Path
 from typing import Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Set your config path here (edit if needed)
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "config.json"
@@ -14,7 +17,7 @@ def _load_config_file() -> dict:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
-        print(f"[CONFIG LOAD ERROR] {e}")
+        logger.info(f"[CONFIG LOAD ERROR] {e}")
         return {}
     
 def _load_phonetics_config_file() -> dict:
@@ -25,10 +28,10 @@ def _load_phonetics_config_file() -> dict:
         with open(PHONETICS_CONFIG_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
-        print(f"[WARNING] Phonetics config file not found: {PHONETICS_CONFIG_PATH}")
+        logger.info(f"[WARNING] Phonetics config file not found: {PHONETICS_CONFIG_PATH}")
         return {}
     except Exception as e:
-        print(f"[ERROR] Failed to load phonetics config: {e}")
+        logger.info(f"[ERROR] Failed to load phonetics config: {e}")
         return {}
     
 def _load_emoji_speech_map_file() -> dict:
@@ -36,10 +39,10 @@ def _load_emoji_speech_map_file() -> dict:
         with open(EMOJI_SPEECH_MAP_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
-        print(f"[WARNING] Emoji speech map file not found: {EMOJI_SPEECH_MAP_PATH}")
+        logger.info(f"[WARNING] Emoji speech map file not found: {EMOJI_SPEECH_MAP_PATH}")
         return {}
     except Exception as e:
-        print(f"[ERROR] Failed to load emoji speech map: {e}")
+        logger.info(f"[ERROR] Failed to load emoji speech map: {e}")
         return {}
 
 _emoji_speech_map_data: dict[str, Any] = _load_emoji_speech_map_file()
@@ -60,10 +63,10 @@ def _watch_config_file(interval=2):
                     with _config_lock:
                         _config_data.clear()
                         _config_data.update(data)
-                        print("[✓] Config reloaded.")
+                        logger.info("[✓] Config reloaded.")
                     last_content = content
         except Exception as e:
-            print(f"[CONFIG WATCH ERROR] {e}")
+            logger.info(f"[CONFIG WATCH ERROR] {e}")
         time.sleep(interval)
 
 def start_config_watcher():
@@ -76,7 +79,7 @@ class Config:
         with _config_lock:
             value = _config_data.get(key, default)
             if warn and value is default:
-                print(f"[WARN] Config key '{key}' not found. Using default: {default}")
+                logger.info(f"[WARN] Config key '{key}' not found. Using default: {default}")
             return value
         
     @staticmethod
@@ -85,7 +88,7 @@ class Config:
         with _config_lock:
             _config_data.clear()
             _config_data.update(data)
-            print("[✓] Config manually reloaded.")
+            logger.info("[✓] Config manually reloaded.")
 
     @staticmethod
     def phonetic_overrides() -> dict:
@@ -148,5 +151,5 @@ class Config:
             return dict(_config_data)
         
 if not _config_data:
-    print("[WARNING] Config file is empty or failed to load.")
+    logger.info("[WARNING] Config file is empty or failed to load.")
 

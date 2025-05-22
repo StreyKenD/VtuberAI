@@ -9,8 +9,7 @@ from vtuber_ai.utils.text import clean_text
 from lorebook.prompt_manager import build_full_prompt, load_lorebook, PREDEFINED_KEYWORDS, get_lore_injections, LOREBOOK
 from ai.memory_module import ConversationMemory
 
-# Ensure logging is configured to show INFO and DEBUG messages in the terminal
-logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+logger = logging.getLogger(__name__)
 
 AI_NAME = "Airi"
 
@@ -37,7 +36,7 @@ class ConversationService:
         """
         with self.lock:
             self.memory.add_user(f"User: {message}")
-            logging.debug(f"User message added to memory: {message}")
+            logger.debug(f"User message added to memory: {message}")
 
     def add_ai_message(self, message: str) -> None:
         """
@@ -45,7 +44,7 @@ class ConversationService:
         """
         with self.lock:
             self.memory.add_ai(f"{AI_NAME}: {message}")
-            logging.debug(f"AI message added to memory: {message}")
+            logger.debug(f"AI message added to memory: {message}")
 
     def extract_triggers(self, message: str) -> list[str]:
         """
@@ -55,7 +54,7 @@ class ConversationService:
         for entry in LOREBOOK:
             if entry["trigger"].lower() in message.lower():
                 triggers.append(entry["trigger"])
-        logging.debug(f"Extracted triggers from message '{message}': {triggers}")
+        logger.debug(f"Extracted triggers from message '{message}': {triggers}")
         return triggers
 
     def build_prompt(self, user_message: str) -> str:
@@ -95,7 +94,7 @@ class ConversationService:
         sections.append(f"[PERSONALITY]\n{self.vtuber_personality.strip()}")
 
         full_prompt = "\n\n".join(sections) + f"\n\n{AI_NAME}:"
-        logging.debug(f"Prompt built successfully with {len(sections)} sections.")
+        logger.debug(f"Prompt built successfully with {len(sections)} sections.")
         return full_prompt
 
     def get_response(self, user_message: str) -> str:
@@ -103,7 +102,7 @@ class ConversationService:
         Handles the full cycle of receiving a user message and generating an AI response.
         """
         try:
-            logging.info(f'{AI_NAME} is thinking...')
+            logger.info(f'{AI_NAME} is thinking...')
             self.add_user_message(user_message)
 
             prompt = self.build_prompt(user_message)
@@ -113,7 +112,7 @@ class ConversationService:
             return response
 
         except Exception as e:
-            logging.exception(f"Error generating response: {e}")
+            logger.exception(f"Error generating response: {e}")
             return "I'm sorry, I encountered an issue while processing your request. Please try again."
 
     def extract_keywords(self, message: str) -> list[str]:

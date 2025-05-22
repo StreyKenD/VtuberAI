@@ -1,13 +1,16 @@
 from langdetect import detect
+import logging
 
-def translate_to_english(text: str) -> str:
+logger = logging.getLogger(__name__)
+
+def generate_response_again(text: str) -> str:
     """
     Translate the input text to English using the LLM response pipeline.
     """
     from vtuber_ai.core.response_gen import generate_response
     from .preprocessor import process_text_for_speech
     prompt = f"Please rephrase the following in English for a VTuber to say aloud: {text}"
-    return generate_response(prompt, process_text_for_speech=process_text_for_speech)
+    return generate_response(prompt, process_text_for_speech)
 
 def detect_and_translate_if_needed(text: str, supported_langs: tuple = ("en", "pt", "ja")) -> tuple[str, str]:
     """
@@ -15,9 +18,9 @@ def detect_and_translate_if_needed(text: str, supported_langs: tuple = ("en", "p
     Returns the (possibly translated) text and the detected language.
     """
     lang = detect_language(text)
-    print("[Language Detect] ", lang)
+    logger.info("[Language Detect] ", lang)
     if lang not in supported_langs:
-        text = translate_to_english(text)
+        text = generate_response_again(text)
         lang = "en"
     return text, lang
 

@@ -1,36 +1,42 @@
 import sys
-import logging
 from vtuber_ai.services.console_app import ConsoleApp
 from vtuber_ai.services.ollama_manager import start_ollama, get_ollama_exit_code
+import logging
+from colorlog import ColoredFormatter
 
-# =====================
-# Imports (modularized)
-# =====================
-from vtuber_ai.core.config_manager import Config
+# Clear all existing logging handlers
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
 
-# =====================
-# Config/Globals
-# =====================
-config = Config()
-EMOTION_MODEL = config.emoji_map()
+# Create colored formatter
+formatter = ColoredFormatter(
+    "%(log_color)s%(asctime)s - %(levelname)s - %(message)s",
+    log_colors={
+        'DEBUG':    'cyan',
+        'INFO':     'green',
+        'WARNING':  'yellow',
+        'ERROR':    'red',
+        'CRITICAL': 'bold_red',
+    }
+)
 
-MAX_MEMORY_LENGTH = config.max_memory_length()
+# Set up handler with formatter
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(formatter)
 
-# =====================
-# Logging Setup
-# =====================
-logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+# Attach to root logger
+root_logger = logging.getLogger(__name__)
+root_logger.addHandler(handler)
+root_logger.setLevel(logging.DEBUG)
 
-# =====================
-# Service Initialization
-# =====================
-# Removed ConversationService initialization as it's now handled within ConsoleApp
+from vtuber_ai.services.console_app import ConsoleApp
 
 # =====================
 # App Lifecycle
 # =====================
 def main() -> None:
     app = ConsoleApp()
+    root_logger.info("\033[93m✨ VTuber Airi is online! Ask anything (type 'exit' to quit, '/help' for commands).\033[0m")
     app.run()
 
 def exit_program() -> None:

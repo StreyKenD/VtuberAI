@@ -4,6 +4,10 @@ from typing import Optional
 from .cleaning import load_emoji_speech_map
 from vtuber_ai.core.config_manager import Config
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 config = Config()
 VOICE_STYLE_DEFAULTS = config.voice_style_defaults()
 PHONETIC_OVERRIDES = config.phonetic_overrides()
@@ -96,7 +100,7 @@ def emoji_to_speech(text, style=None):
     # Only print when a replacement happens for easier debugging
     for tag, phrase in EMOJI_SPEECH_MAP.items():
         if tag in text:
-            print(f"[Emoji2Speech] Replacing {tag} with {phrase}")
+            logger.info(f"[Emoji2Speech] Replacing {tag} with {phrase}")
             replaced = True
         text = text.replace(tag, phrase)
     # Remove emojis at the beginning
@@ -104,7 +108,7 @@ def emoji_to_speech(text, style=None):
     while text and emoji.emoji_list(text[:2]):
         first_emoji = emoji.emoji_list(text[:2])[0]['emoji']
         if text.startswith(first_emoji):
-            print(f"[Emoji2Speech] Removing emoji at start: {first_emoji}")
+            logger.info(f"[Emoji2Speech] Removing emoji at start: {first_emoji}")
             text = text[len(first_emoji):].lstrip()
             removed_start = True
         else:
@@ -114,13 +118,13 @@ def emoji_to_speech(text, style=None):
     while text and emoji.emoji_list(text[-2:]):
         last_emoji = emoji.emoji_list(text[-2:])[-1]['emoji']
         if text.endswith(last_emoji):
-            print(f"[Emoji2Speech] Removing emoji at end: {last_emoji}")
+            logger.info(f"[Emoji2Speech] Removing emoji at end: {last_emoji}")
             text = text[:-len(last_emoji)].rstrip()
             removed_end = True
         else:
             break
     if not replaced and not removed_start and not removed_end:
-        print("[Emoji2Speech] No emojis replaced or removed.")
+        logger.info("[Emoji2Speech] No emojis replaced or removed.")
     return text
 
 def clean_tilde_tokens(text: str) -> str:

@@ -5,6 +5,10 @@ from datetime import datetime
 import os
 from typing import Optional
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 def log_chat(question: str, response: str, filename: Optional[str] = None):
     """
     Log a chat interaction to a file with a timestamp.
@@ -19,4 +23,4 @@ def log_chat(question: str, response: str, filename: Optional[str] = None):
         with open(filename, "a", encoding="utf-8") as f:
             f.write(f"[{timestamp}]\nVocê: {question}\nAiri: {response}\n\n")
     except Exception as e:
-        print(f"[Log error]: {e}")
+        logger.info(f"[Log error]: {e}")

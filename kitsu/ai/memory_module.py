@@ -5,6 +5,13 @@ from pathlib import Path
 from typing import Callable, Dict, Optional
 import logging
 
+logger = logging.getLogger(__name__)
+
+# LangChain
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import Runnable
+from langchain_community.chat_models import ChatOllama
 
 class ConversationMemory:
     def __init__(
@@ -45,7 +52,7 @@ class ConversationMemory:
             self.summary = ""
             self.facts.clear()
             self.save_facts()
-            logging.info("Conversation memory cleared.")
+            logger.info("Conversation memory cleared.")
 
     def get_prompt_context(self, personality_prompt: str = "") -> str:
         """
@@ -76,9 +83,9 @@ class ConversationMemory:
             self.save_path.parent.mkdir(parents=True, exist_ok=True)
             with open(self.save_path, "w", encoding="utf-8") as f:
                 json.dump(self.facts, f, indent=2, ensure_ascii=False)
-            logging.debug(f"Facts saved to {self.save_path}")
+            logger.debug(f"Facts saved to {self.save_path}")
         except Exception as e:
-            logging.error(f"Failed to save facts: {e}")
+            logger.error(f"Failed to save facts: {e}")
 
     def load_facts(self) -> None:
         if not self.save_path.exists():
@@ -86,6 +93,25 @@ class ConversationMemory:
         try:
             with open(self.save_path, "r", encoding="utf-8") as f:
                 self.facts = json.load(f)
-            logging.debug(f"Facts loaded from {self.save_path}")
+            logger.debug(f"Facts loaded from {self.save_path}")
         except Exception as e:
-            logging.warning(f"Failed to load facts: {e}")
+            logger.warning(f"Failed to load facts: {e}")
+
+    def summarize_with_langchain(self, llm=None) -> str:
+        """Summarizes recent memory using LangChain + Ollama Mistral."""
+        with self.lock:
+            if not self.memory:
+                return ""
+
+            if llm is None:
+                llm = ChatOllama(model="mistral", temperature=0.3)
+
+            prompt_template = PromptTemplate.from_template(
+                "Summarize the following conversation between User and {ai_name}:\n\n{chat}\n\nSummary:"
+            )
+
+            chain: Runnable = prompt_template | llm | StrOutputParser()
+            recent_chat = "\n".join(self.memory)
+            summary = chain.invoke({"chat": recent_chat, "ai_name": self.ai_name})
+            self.set_summary(summary)
+            return summary

@@ -4,6 +4,10 @@ from phonemizer import phonemize
 from vtuber_ai.core.config_manager import Config
 import pyphen
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 config = Config()
 VOICE_STYLE_DEFAULTS = config.voice_style_defaults()
 PHONETIC_OVERRIDES = config.phonetic_overrides()
@@ -84,7 +88,7 @@ def prepare_phonemes(text: str, lang: str, style: Optional[str] = None, emotion:
     styles = VOICE_STYLE_DEFAULTS or {}
     for word in words:
         raw_phonemes = word_to_phonemes(word, lang)
-        print(f"🔹 {word} → {raw_phonemes}")
+        logger.info(f"🔹 {word} → {raw_phonemes}")
         if raw_phonemes:
             if style and styles.get(style, {}).get("vowel_drag", False):
                 styled_phonemes = apply_vowel_drag(raw_phonemes.split(), word, style)
@@ -94,8 +98,8 @@ def prepare_phonemes(text: str, lang: str, style: Optional[str] = None, emotion:
         else:
             full_phoneme_sequence.append(word)
     final_result = ' '.join(full_phoneme_sequence)
-    print("🔊 Input Text:", text)
-    print("🧬 Final Phonemes:", full_phoneme_sequence)
+    logger.info("🔊 Input Text:", text)
+    logger.info("🧬 Final Phonemes:", full_phoneme_sequence)
     return final_result
 
 def word_to_phonemes(word: str, lang: str) -> str:
@@ -114,7 +118,7 @@ def word_to_phonemes(word: str, lang: str) -> str:
     override = phonetic_overrides.get(lang, {}).get(word) if phonetic_overrides.get(lang) else None
     input_word = override if override else word
     if not resolved_lang:
-        print(f"[Phonemizer Error]: Unsupported language '{lang}' for word '{word}'")
+        logger.info(f"[Phonemizer Error]: Unsupported language '{lang}' for word '{word}'")
         return word
     try:
         phonemes = phonemize(
@@ -128,7 +132,7 @@ def word_to_phonemes(word: str, lang: str) -> str:
             phonemes = " ".join(str(p) for p in phonemes if isinstance(p, str))
         return phonemes
     except Exception as e:
-        print(f"[Phonemizer Error]: {e}")
+        logger.info(f"[Phonemizer Error]: {e}")
         return word
     
 def safe_to_split(buffer: str, idx: int) -> bool:

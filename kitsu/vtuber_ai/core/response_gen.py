@@ -2,13 +2,15 @@ import time
 import json
 import re
 import requests
+import logging
 from typing import Callable
 from ai.tts_module import speak_with_emotion
 from ai.text_utils import safe_to_split
 
+logger = logging.getLogger(__name__)
+
 def generate_response(
     user_input: str,
-    memory,
     process_text_for_speech: Callable[[str], tuple[str, float, float]]
 ) -> str:
     """
@@ -16,32 +18,23 @@ def generate_response(
     Only one LLM call is made.
     """
     # 🧠 Construct prompt with request for summary
-    context = memory.get_prompt_context()
-    prompt = (
-        f"{context}\n\n"
-        f"User: {user_input}\n"
-        f"{memory.ai_name}: "
-        f"\n\nPlease respond to the user as {memory.ai_name}, then include a summary.\n"
-        f"Format:\n<response>Your reply here.</response>\n<summary>Brief summary.</summary>"
-    )
 
-    print(f"[INFO] Sending prompt to Mistral...")
+    logger.info("[INFO] Sending prompt to Mistral...")
 
     try:
         response = requests.post(
             "http://localhost:11434/api/generate",
             json={
                 "model": "mistral",
-                "prompt": prompt,
+                "prompt": user_input,
                 "temperature": 0.8,
                 "top_p": 0.9,
                 "stream": True
             },
-            stream=True,
-            timeout=10
+            stream=True
         )
     except Exception as e:
-        print(f"[ERROR] Ollama request failed: {e}")
+        logger.error(f"Ollama request failed: {e}")
         return "Sorry, my brain glitched >_<"
 
     buffer = ""
@@ -80,30 +73,14 @@ def generate_response(
             if "\n" in buffer:
                 segments = buffer.split("\n")
                 for seg in segments[:-1]:
+                    logger.info('[BUFFER LOG - 1]',seg.strip())
                     handle_line_split(seg.strip())
                 buffer = segments[-1]
     if buffer.strip():
+        logger.info('[BUFFER LOG - 2]',buffer.strip())
         handle_line_split(buffer.strip())
 
     elapsed = time.time() - start_time
-    print(f"[INFO] Ollama streaming finished in {elapsed:.2f}s")
+    logger.info(f"Ollama streaming finished in {elapsed:.2f}s")
 
-    # ✂️ Extract <response> and <summary> blocks
-    ai_reply = full_response
-    summary = ""
-
-    match_response = re.search(r"<response>(.*?)</response>", full_response, re.DOTALL)
-    match_summary = re.search(r"<summary>(.*?)</summary>", full_response, re.DOTALL)
-
-    if match_response:
-        ai_reply = match_response.group(1).strip()
-    if match_summary:
-        summary = match_summary.group(1).strip()
-
-    # 🧠 Update memory
-    memory.add_user(user_input)
-    memory.add_ai(ai_reply)
-    if summary:
-        memory.set_summary(summary)
-
-    return ai_reply
+    return full_response

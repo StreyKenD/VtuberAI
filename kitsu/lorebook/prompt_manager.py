@@ -3,6 +3,8 @@ from pathlib import Path
 import json
 import logging
 
+logger = logging.getLogger(__name__)
+
 # Always use the directory of this file for lorebook files
 LOREBOOK = []
 PREDEFINED_KEYWORDS = []
@@ -21,10 +23,10 @@ def load_lorebook() -> list[dict]:
             PREDEFINED_KEYWORDS = [entry["trigger"] for entry in LOREBOOK]  # Extract triggers
             return LOREBOOK
     except FileNotFoundError:
-        logging.warning(f"Lorebook file not found: {LOREBOOK_PATH}")
+        logger.warning(f"Lorebook file not found: {LOREBOOK_PATH}")
         return []
     except Exception as e:
-        logging.error(f"Error loading lorebook: {e}")
+        logger.error(f"Error loading lorebook: {e}")
         return []
 
 def get_lore_injections(triggers: list[str], position: str) -> list[str]:
@@ -37,7 +39,7 @@ def get_lore_injections(triggers: list[str], position: str) -> list[str]:
         if any(t.lower() in [trigger.lower() for trigger in triggers] for t in entry["trigger"]) and entry["position"] == position:
             injections.append((entry["priority"], entry["injection"]))
     # Sort by priority and return only the injections
-    logging.debug(f"Lore injections for position '{position}': {len(injections)} found.")
+    logger.debug(f"Lore injections for position '{position}': {len(injections)} found.")
     return [injection for _, injection in sorted(injections, key=lambda x: x[0])]
 
 def load_prompt(filename: str) -> str:
@@ -98,5 +100,5 @@ def build_full_prompt(streamer_name: str, keywords: list[str] = []) -> str:
         templates.get("response_format_rules", ""),
         "\n".join(lore)  # Join lore list into a string
     ])
-    logging.debug(f"[DEBUG] Full prompt generated (truncated):\n{full_prompt[:500]}...")
+    logger.debug(f"[DEBUG] Full prompt generated (truncated):\n{full_prompt[:500]}...")
     return full_prompt
