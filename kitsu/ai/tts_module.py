@@ -34,6 +34,7 @@ def get_tts() -> TTS:
     """Return a singleton TTS instance with the default model, using GPU if available."""
     global tts
     if tts is not None:
+        logger.info(f"TTS model already loaded: {tts}")
         return tts
     device = "cuda" if torch.cuda.is_available() else "cpu"
     logger.info(f"Loading TTS model on device: {device}")
@@ -58,8 +59,8 @@ def speak_with_emotion(
     global tts, llm_outputs
     logger.debug(f"speak_with_emotion called with text: {text}")
     text = clean_artifacts(text)
-    if tts is None:
-        tts = get_tts()
+    tts = get_tts()
+
     try:
         result = process_text_for_speech(text)
         text, pitch, rate = result

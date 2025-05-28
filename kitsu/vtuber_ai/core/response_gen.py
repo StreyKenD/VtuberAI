@@ -40,47 +40,63 @@ def generate_response(
     buffer = ""
     full_response = ""
 
-    def handle_line_split(text: str):
-        lines = text.splitlines()
-        for line in lines:
-            if not line.strip():
-                continue
-            split_points = []
-            i = 0
-            while i < len(line):
-                if line[i] in ".!?":
-                    if safe_to_split(line, i):
-                        split_points.append(i)
-                i += 1
-            last_split = 0
-            for idx in split_points:
-                chunk = line[last_split:idx + 1].strip()
-                if chunk:
-                    speak_with_emotion(chunk, process_text_for_speech)
-                last_split = idx + 1
-            if last_split < len(line):
-                leftover = line[last_split:].strip()
-                if leftover:
-                    speak_with_emotion(leftover, process_text_for_speech)
+    def process_buffer():
+        nonlocal buffer
+        split_points = []
+        i = 0
+        while i < len(buffer):
+            if buffer[i] in ".!?\n":
+                if buffer[i] == '\n' or safe_to_split(buffer, i):
+                    split_points.append(i)
+            i += 1
 
-    # 🔁 Stream in chunks
+        last_split = 0
+        for idx in split_points:
+            chunk = buffer[last_split:idx + 1].strip()
+            if chunk:
+                logger.debug("[TTS CHUNK] " + repr(chunk))
+                clean_chunk, emotes = extract_emotes(chunk)
+                if clean_chunk:
+                    speak_with_emotion(clean_chunk, process_text_for_speech)
+
+                for emote in emotes:
+                    trigger_emote(emote)
+            last_split = idx + 1
+
+        # Save leftover part in the buffer
+        buffer = buffer[last_split:].lstrip()
+
+    # 🔁 Stream and process in real time
     start_time = time.time()
     for line in response.iter_lines():
         if line:
             part = json.loads(line.decode("utf-8"))["response"]
             buffer += part
             full_response += part
-            if "\n" in buffer:
-                segments = buffer.split("\n")
-                for seg in segments[:-1]:
-                    logger.info('[BUFFER LOG - 1]',seg.strip())
-                    handle_line_split(seg.strip())
-                buffer = segments[-1]
+            process_buffer()
+
+    # 🔚 Final flush
     if buffer.strip():
-        logger.info('[BUFFER LOG - 2]',buffer.strip())
-        handle_line_split(buffer.strip())
+        logger.debug("[FINAL FLUSH] " + repr(buffer.strip()))
+        speak_with_emotion(buffer.strip(), process_text_for_speech)
 
     elapsed = time.time() - start_time
     logger.info(f"Ollama streaming finished in {elapsed:.2f}s")
 
     return full_response
+
+def trigger_emote(action: str):
+    """
+    Placeholder to trigger emotes, animations, or expressions.
+    You can customize this to connect to your avatar system.
+    """
+    logger.info(f"[EMOTE TRIGGERED] *{action}*")
+    # Example: send to websocket, animation API, etc.
+
+def extract_emotes(text: str):
+    """
+    Extract actions like *waves* from text and return cleaned text + list of actions.
+    """
+    actions = re.findall(r"\*(.*?)\*", text)
+    clean_text = re.sub(r"\*(.*?)\*", "", text).strip()
+    return clean_text, actions

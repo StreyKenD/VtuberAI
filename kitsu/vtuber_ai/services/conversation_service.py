@@ -22,6 +22,8 @@ class ConversationService:
         self.memory = ConversationMemory()
         self.response_fn = response_fn
 
+        self.logger = logging.getLogger(__name__)
+
         self.max_memory_length = Config.max_memory_length()
         self.streamer_name = Config.streamer_name()
         self.vtuber_personality = build_full_prompt(self.streamer_name)
@@ -36,7 +38,7 @@ class ConversationService:
         """
         with self.lock:
             self.memory.add_user(f"User: {message}")
-            logger.debug(f"User message added to memory: {message}")
+            self.logger.debug(f"User message added to memory: {message}")
 
     def add_ai_message(self, message: str) -> None:
         """
@@ -44,7 +46,7 @@ class ConversationService:
         """
         with self.lock:
             self.memory.add_ai(f"{AI_NAME}: {message}")
-            logger.debug(f"AI message added to memory: {message}")
+            self.logger.debug(f"AI message added to memory: {message}")
 
     def extract_triggers(self, message: str) -> list[str]:
         """
@@ -54,7 +56,7 @@ class ConversationService:
         for entry in LOREBOOK:
             if entry["trigger"].lower() in message.lower():
                 triggers.append(entry["trigger"])
-        logger.debug(f"Extracted triggers from message '{message}': {triggers}")
+        self.logger.debug(f"Extracted triggers from message '{message}': {triggers}")
         return triggers
 
     def build_prompt(self, user_message: str) -> str:
@@ -94,7 +96,7 @@ class ConversationService:
         sections.append(f"[PERSONALITY]\n{self.vtuber_personality.strip()}")
 
         full_prompt = "\n\n".join(sections) + f"\n\n{AI_NAME}:"
-        logger.debug(f"Prompt built successfully with {len(sections)} sections.")
+        self.logger.debug(f"Prompt built successfully with {len(sections)} sections.")
         return full_prompt
 
     def get_response(self, user_message: str) -> str:
@@ -102,7 +104,7 @@ class ConversationService:
         Handles the full cycle of receiving a user message and generating an AI response.
         """
         try:
-            logger.info(f'{AI_NAME} is thinking...')
+            self.logger.info(f'{AI_NAME} is thinking...')
             self.add_user_message(user_message)
 
             prompt = self.build_prompt(user_message)

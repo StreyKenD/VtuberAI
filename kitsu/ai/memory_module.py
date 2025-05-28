@@ -44,14 +44,12 @@ class ConversationMemory:
     def add_fact(self, key: str, value: str) -> None:
         with self.lock:
             self.facts[key] = value
-            self.save_facts()
 
     def clear(self) -> None:
         with self.lock:
             self.memory.clear()
             self.summary = ""
             self.facts.clear()
-            self.save_facts()
             logger.info("Conversation memory cleared.")
 
     def get_prompt_context(self, personality_prompt: str = "") -> str:
